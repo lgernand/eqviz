@@ -279,7 +279,6 @@ int main(int argc, char** argv) {
     int frame = 0;
     double cpuMs = 0;
     std::vector<double> frameMs;
-    ImVec4 bg = theme::colv(theme::BG);
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         double now = glfwGetTime();
@@ -288,6 +287,7 @@ int main(int argc, char** argv) {
 
         auto t0 = std::chrono::steady_clock::now();
         app.plat_ = platformPoll();
+        app.applyPendingFonts();  // font changes take effect between frames
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         if (opt.mouseX >= 0) io.AddMousePosEvent(opt.mouseX, opt.mouseY);
@@ -311,6 +311,7 @@ int main(int argc, char** argv) {
         int fw, fh;
         glfwGetFramebufferSize(window, &fw, &fh);
         glViewport(0, 0, fw, fh);
+        ImVec4 bg = theme::colv(theme::BG);
         glClearColor(bg.x, bg.y, bg.z, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

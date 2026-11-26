@@ -14,9 +14,8 @@
 using namespace theme;
 namespace fs = std::filesystem;
 
-static const int kPalette[] = {YELLOW_C, BLUE_C, GREEN_C, RED_C, PURPLE_C, GOLD_C, TEAL_C, PINK};
-
 int App::nextColor() const {
+    const int kPalette[] = {YELLOW_C, BLUE_C, GREEN_C, RED_C, PURPLE_C, GOLD_C, TEAL_C, PINK};
     for (int c : kPalette) {
         bool used = false;
         for (auto& d : funcs_) used |= d.color == c;
@@ -653,7 +652,7 @@ void App::drawFunctionList() {
         if (d.editLabel || named) {
             ImGui::Indent(28);
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - fh - 6);
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.09f, 0.10f, 0.125f, 1));
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, surface(0.06f));
             if (d.editLabel && ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
             ImGui::InputTextWithHint("##label", "Display name (shown instead of the formula)", d.label, sizeof d.label);
             if (ImGui::IsItemDeactivated()) d.editLabel = false;
@@ -695,10 +694,9 @@ void App::drawFunctionList() {
     }
 
     float half = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
-    ImVec4 a = colv(BLUE_C);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(a.x * 0.42f, a.y * 0.42f, a.z * 0.42f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(a.x * 0.55f, a.y * 0.55f, a.z * 0.55f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(a.x * 0.68f, a.y * 0.68f, a.z * 0.68f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, accentSurface(0.38f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accentSurface(0.50f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, accentSurface(0.62f));
     if (ImGui::Button("+  Add function", ImVec2(half, 34))) {
         FuncDef d;
         d.color = nextColor();

@@ -14,6 +14,7 @@ struct Prim {
     enum Kind { Text, Line, Poly, Fill, Strip } kind = Text;  // Strip: outer/inner pairs
     ImVec2 a{0, 0}, b{0, 0};  // Text: a = baseline-left; Line: endpoints
     float size = 0, thick = 0;
+    ImFont* font = nullptr;  // Text: nullptr = the main math font
     std::string s;
     std::vector<ImVec2> pts;
 };
@@ -26,7 +27,9 @@ struct Box {
 
 using Rename = std::map<std::string, std::string>;
 
-void init(ImFont* mathFont, bool mathAlphanumerics);
+// mathAlphanumerics: the font has the Unicode math-italic alphabet (e.g. STIX Two Math).
+// Otherwise variables are set in `italicFont` (when given) and everything else upright.
+void init(ImFont* mathFont, bool mathAlphanumerics, ImFont* italicFont = nullptr);
 
 Box text(const std::string& utf8, float size);        // upright
 Box ident(const std::string& name, float size);       // italic variable, Greek + subscripts

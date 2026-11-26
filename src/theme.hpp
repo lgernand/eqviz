@@ -2,31 +2,55 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "imgui.h"
 
 namespace theme {
 
-// manim colour constants
-constexpr int BG = 0x0C0E12;
-constexpr int WHITE = 0xFFFFFF;
-constexpr int LIGHT_GREY = 0xBBBBBB;
-constexpr int GREY = 0x888888;
-constexpr int DARK_GREY = 0x444444;
-constexpr int BLUE_A = 0xC7E9F1;
-constexpr int BLUE_B = 0x9CDCEB;
-constexpr int BLUE_C = 0x58C4DD;
-constexpr int BLUE_D = 0x29ABCA;
-constexpr int BLUE_E = 0x1C758A;
-constexpr int TEAL_C = 0x5CD0B3;
-constexpr int GREEN_C = 0x83C167;
-constexpr int YELLOW_C = 0xFFFF00;
-constexpr int YELLOW_D = 0xF4D345;
-constexpr int GOLD_C = 0xF0AC5F;
-constexpr int RED_C = 0xFC6255;
-constexpr int MAROON_C = 0xC55F73;
-constexpr int PURPLE_C = 0x9A72AC;
-constexpr int PINK = 0xD147BD;
+// Palette slots. These are runtime values so themes can swap them (see themes.cpp);
+// names follow manim's colour constants, which the default theme uses.
+// WHITE is the foreground (ink) colour and BG the background in every theme.
+inline int BG = 0x0C0E12;
+inline int WHITE = 0xFFFFFF;
+inline int LIGHT_GREY = 0xBBBBBB;
+inline int GREY = 0x888888;
+inline int DARK_GREY = 0x444444;
+inline int BLUE_A = 0xC7E9F1;
+inline int BLUE_B = 0x9CDCEB;
+inline int BLUE_C = 0x58C4DD;   // accent
+inline int BLUE_D = 0x29ABCA;   // grid lines
+inline int BLUE_E = 0x1C758A;
+inline int TEAL_C = 0x5CD0B3;
+inline int GREEN_C = 0x83C167;
+inline int YELLOW_C = 0xFFFF00;
+inline int YELLOW_D = 0xF4D345;
+inline int GOLD_C = 0xF0AC5F;
+inline int RED_C = 0xFC6255;
+inline int MAROON_C = 0xC55F73;
+inline int PURPLE_C = 0x9A72AC;
+inline int PINK = 0xD147BD;
+
+constexpr int kNumSlots = 19;
+inline int* slot(int i) {
+    static int* s[kNumSlots] = {&BG, &WHITE, &LIGHT_GREY, &GREY, &DARK_GREY, &BLUE_A, &BLUE_B, &BLUE_C, &BLUE_D, &BLUE_E,
+                                &TEAL_C, &GREEN_C, &YELLOW_C, &YELLOW_D, &GOLD_C, &RED_C, &MAROON_C, &PURPLE_C, &PINK};
+    return s[i];
+}
+inline const char* slotName(int i) {
+    static const char* n[kNumSlots] = {"Background", "Foreground", "Light grey", "Grey", "Dark grey", "Blue A", "Blue B",
+                                       "Accent", "Grid", "Blue E", "Teal", "Green", "Yellow", "Yellow D", "Gold", "Red",
+                                       "Maroon", "Purple", "Pink"};
+    return n[i];
+}
+
+struct Theme {
+    const char* name;
+    int c[kNumSlots];
+};
+const std::vector<Theme>& presets();
+void apply(const Theme& t);
+Theme current(const char* name);
 
 inline ImU32 col(int hex, float a = 1.f) {
     a = std::clamp(a, 0.f, 1.f);
@@ -55,6 +79,14 @@ inline ImU32 hsv(float h, float s, float v, float a = 1.f) {
     ImGui::ColorConvertHSVtoRGB(h - std::floor(h), s, v, r, g, b);
     return IM_COL32((int)(r * 255), (int)(g * 255), (int)(b * 255), (int)(std::clamp(a, 0.f, 1.f) * 255));
 }
+
+inline ImVec4 mixv(int a, int b, float t, float alpha = 1.f) {
+    ImVec4 x = colv(a), y = colv(b);
+    return ImVec4(x.x + (y.x - x.x) * t, x.y + (y.y - x.y) * t, x.z + (y.z - x.z) * t, alpha);
+}
+// Panel surfaces are a blend of background and foreground; accented surfaces blend in the accent.
+inline ImVec4 surface(float t, float alpha = 1.f) { return mixv(BG, WHITE, t, alpha); }
+inline ImVec4 accentSurface(float t, float alpha = 1.f) { return mixv(BG, BLUE_C, t, alpha); }
 
 // manim's `smooth` rate function
 inline float smooth(float t) {

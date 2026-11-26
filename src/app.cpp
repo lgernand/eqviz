@@ -77,7 +77,8 @@ bool Camera::project(const Vec3& p, ImVec2& out, float& depth) const {
 void App::init(const Fonts& f, const LaunchOptions& o) {
     fonts_ = f;
     opt_ = o;
-    ts::init(f.math, f.mathAlnum);
+    ts::init(f.math, f.mathAlnum, f.mathItalic);
+    loadSettings();
     setupStyle();
     complex_ = o.complex;
     deriv_ = o.deriv;
@@ -605,6 +606,10 @@ void App::runScriptedActions() {
         else if (a == "x") closePane(focus_);
         else if (a == "hide") togglePanel();
         else if (a.rfind("res", 0) == 0) surfRes_ = std::atoi(a.c_str() + 3);
+        else if (a.rfind("theme", 0) == 0) selectTheme(std::atoi(a.c_str() + 5));
+        else if (a.rfind("pscroll", 0) == 0) panelScrollReq_ = (float)std::atof(a.c_str() + 7);
+        else if (a.rfind("uifont", 0) == 0) pendingUiFont_ = std::atoi(a.c_str() + 6);
+        else if (a.rfind("mathfont", 0) == 0) pendingMathFont_ = std::atoi(a.c_str() + 8);
         else if (a.size() > 2 && a[0] == 'N') {  // N<row>;<display name>
             size_t semi = a.find(';');
             int row = std::atoi(a.c_str() + 1);

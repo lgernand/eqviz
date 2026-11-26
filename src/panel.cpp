@@ -24,31 +24,38 @@ void App::setupStyle() {
     s.PopupBorderSize = 1;
     s.GrabMinSize = 14;
     s.ScrollbarSize = 9;
-    ImVec4* c = s.Colors;
-    c[ImGuiCol_Text] = ImVec4(0.92f, 0.93f, 0.95f, 1);
-    c[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.54f, 0.60f, 1);
-    c[ImGuiCol_WindowBg] = ImVec4(0.063f, 0.071f, 0.090f, 0.98f);
-    c[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.10f, 0.125f, 0.99f);
-    c[ImGuiCol_Border] = ImVec4(1, 1, 1, 0.08f);
-    c[ImGuiCol_FrameBg] = ImVec4(0.12f, 0.135f, 0.165f, 1);
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.155f, 0.175f, 0.215f, 1);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.18f, 0.205f, 0.255f, 1);
-    c[ImGuiCol_Button] = ImVec4(0.135f, 0.15f, 0.185f, 1);
-    c[ImGuiCol_ButtonHovered] = ImVec4(0.18f, 0.205f, 0.25f, 1);
-    c[ImGuiCol_ButtonActive] = ImVec4(0.22f, 0.25f, 0.31f, 1);
+    applyThemeColors();
+}
+
+// Panel colours come from the active theme: surfaces blend background into foreground,
+// so the same code serves dark and light themes.
+void App::applyThemeColors() {
+    ImVec4* c = ImGui::GetStyle().Colors;
+    c[ImGuiCol_Text] = surface(0.93f);
+    c[ImGuiCol_TextDisabled] = surface(0.52f);
+    c[ImGuiCol_WindowBg] = surface(0.035f, 0.98f);
+    c[ImGuiCol_PopupBg] = surface(0.07f, 0.99f);
+    c[ImGuiCol_Border] = surface(1.f, 0.08f);
+    c[ImGuiCol_FrameBg] = surface(0.09f);
+    c[ImGuiCol_FrameBgHovered] = surface(0.13f);
+    c[ImGuiCol_FrameBgActive] = surface(0.17f);
+    c[ImGuiCol_Button] = surface(0.10f);
+    c[ImGuiCol_ButtonHovered] = surface(0.15f);
+    c[ImGuiCol_ButtonActive] = surface(0.20f);
     c[ImGuiCol_SliderGrab] = colv(BLUE_C);
-    c[ImGuiCol_SliderGrabActive] = colv(BLUE_B);
+    c[ImGuiCol_SliderGrabActive] = mixv(BLUE_C, WHITE, 0.3f);
     c[ImGuiCol_CheckMark] = colv(BLUE_C);
-    c[ImGuiCol_Header] = ImVec4(0.15f, 0.17f, 0.21f, 1);
-    c[ImGuiCol_HeaderHovered] = ImVec4(0.19f, 0.22f, 0.27f, 1);
-    c[ImGuiCol_HeaderActive] = ImVec4(0.22f, 0.25f, 0.31f, 1);
-    c[ImGuiCol_Separator] = ImVec4(1, 1, 1, 0.08f);
+    c[ImGuiCol_Header] = surface(0.12f);
+    c[ImGuiCol_HeaderHovered] = surface(0.16f);
+    c[ImGuiCol_HeaderActive] = surface(0.20f);
+    c[ImGuiCol_Separator] = surface(1.f, 0.08f);
     c[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
-    c[ImGuiCol_ScrollbarGrab] = ImVec4(1, 1, 1, 0.12f);
-    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1, 1, 1, 0.2f);
-    c[ImGuiCol_ScrollbarGrabActive] = ImVec4(1, 1, 1, 0.28f);
-    c[ImGuiCol_TextSelectedBg] = colv(BLUE_D, 0.35f);
+    c[ImGuiCol_ScrollbarGrab] = surface(1.f, 0.12f);
+    c[ImGuiCol_ScrollbarGrabHovered] = surface(1.f, 0.2f);
+    c[ImGuiCol_ScrollbarGrabActive] = surface(1.f, 0.28f);
+    c[ImGuiCol_TextSelectedBg] = colv(BLUE_C, 0.35f);
     c[ImGuiCol_PlotHistogram] = colv(BLUE_C);
+    c[ImGuiCol_Tab] = surface(0.10f);
 }
 
 // ------------------------------------------------------------------ widgets
@@ -58,10 +65,9 @@ namespace {
 enum class Icon { Play, Pause, Step, Reset, End };
 
 void pushAccent(int hex) {
-    ImVec4 a = colv(hex);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(a.x * 0.42f, a.y * 0.42f, a.z * 0.42f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(a.x * 0.55f, a.y * 0.55f, a.z * 0.55f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(a.x * 0.68f, a.y * 0.68f, a.z * 0.68f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, mixv(BG, hex, 0.38f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, mixv(BG, hex, 0.50f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, mixv(BG, hex, 0.62f));
 }
 
 bool iconButton(const char* id, Icon ic, ImVec2 size, bool accent = false) {
@@ -144,7 +150,7 @@ void App::drawPanel() {
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.09f, 0.10f, 0.125f, 0.92f));
+        ImGui::PushStyleColor(ImGuiCol_Button, surface(0.08f, 0.92f));
         ImGui::PushFont(fonts_.ui, 18.f);
         if (ImGui::Button("\xE2\x98\xB0", ImVec2(40, 40))) togglePanel();
         ImGui::PopFont();
@@ -447,6 +453,10 @@ void App::drawPanel() {
     }
     if (ImGui::Button("Reset view", ImVec2(-1, 32))) resetView();
 
+    // ---- appearance
+    sectionHeader("APPEARANCE", fonts_.uiBold);
+    drawAppearanceSection();
+
     // ---- help
     ImGui::Dummy(ImVec2(0, 6));
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
@@ -466,6 +476,12 @@ void App::drawPanel() {
     ImGui::PopFont();
     ImGui::End();
 
+    if (panelScrollReq_ >= 0) {
+        ImGui::Begin("##panel");
+        ImGui::SetScrollY(panelScrollReq_ > 1e5f ? ImGui::GetScrollMaxY() : panelScrollReq_);
+        ImGui::End();
+        panelScrollReq_ = -1;
+    }
     if (panelW_ > 1) ImGui::GetBackgroundDrawList()->AddLine(ImVec2(panelW_, 0), ImVec2(panelW_, io.DisplaySize.y), col(WHITE, 0.07f));
 }
 
@@ -518,7 +534,7 @@ void App::drawOverlay(ImDrawList* dl) {
         ImU32 c = col(d.color, !isActive && multi ? 0.85f : 1.f);
         if (complex_ && isActive) c = col(WHITE, deriv_ ? 0.55f : 1.f);
         else if (threeD_ && isActive && !complex_ && !multi) c = col(BLUE_C);
-        const float size = isActive ? (multi ? 26.f : 30.f) : 22.f;
+        const float size = (isActive ? (multi ? 26.f : 30.f) : 22.f) * labelScale_;
         if (d.label[0]) {  // a named function shows its name instead of the formula
             ts::Box b = ts::text(d.label, size);
             float base = y + 10 + b.asc;
@@ -538,7 +554,7 @@ void App::drawOverlay(ImDrawList* dl) {
             if (!a->params.empty()) ren["x"] = a->params[0];
             if (a->params.size() > 1) ren["y"] = a->params[1];
         }
-        const float SD = 24.f;
+        const float SD = 24.f * labelScale_;
         if (threeD_ && !complex_) {
             auto partial = [&](const char* v) {
                 return [&, v](float s) {

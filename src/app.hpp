@@ -13,6 +13,7 @@
 #include "expr.hpp"
 #include "platform.hpp"
 #include "imgui.h"
+#include "theme.hpp"
 #include "typeset.hpp"
 
 using eq::cplx;
@@ -164,8 +165,23 @@ struct Fonts {
     ImFont* ui = nullptr;
     ImFont* uiBold = nullptr;
     ImFont* math = nullptr;
+    ImFont* mathItalic = nullptr;  // used when the math font lacks the math-italic alphabet
     bool mathAlnum = false;
 };
+
+// Font choices offered in the Appearance section (fonts.cpp); loaded on demand.
+struct FontChoice {
+    const char* name;
+    const char* path;
+    int face;               // index inside a .ttc collection
+    const char* altPath;    // UI: bold face file; math: italic face file (nullptr = same file)
+    int altFace;
+    bool mathAlnum;         // math: the font has the Unicode math-italic alphabet
+};
+const std::vector<FontChoice>& uiFontChoices();
+const std::vector<FontChoice>& mathFontChoices();
+bool loadUiFont(int index, Fonts& f);
+bool loadMathFont(int index, Fonts& f);
 
 struct LaunchOptions {
     std::string eq;
@@ -258,6 +274,17 @@ public:
     void shutdown();
 
     PlatformInput plat_;
+    // appearance (saved to the settings file)
+    int themeIdx_ = 0;            // preset index, -1 = custom
+    theme::Theme customTheme_{"Custom", {}};
+    int uiFontIdx_ = 0, mathFontIdx_ = 0, pendingUiFont_ = -1, pendingMathFont_ = -1;
+    float textScale_ = 1.f, labelScale_ = 1.f;
+    void selectTheme(int idx);
+    void setThemeSlot(int slot, int color);
+    void applyPendingFonts();     // called by main before each frame
+    void loadSettings();
+    void saveSettings() const;
+    void drawAppearanceSection();
     bool useGpu_ = true;       // domain colouring on the GPU when the expression allows it
     std::string gpuStatus_;    // why the last domain colouring ran on the CPU ("" = GPU)  // native trackpad scroll / pinch for this frame (set by main)
 
@@ -328,7 +355,8 @@ public:
     void handleLayoutInput();
     void drawLayoutChrome(ImDrawList* dl);
     void drawRotateControl(int pane);
-    int rotateDragPane_ = -1;  // on-canvas spin button + speed slider for 3D panes
+    int rotateDragPane_ = -1;
+    float panelScrollReq_ = -1;  // testing: scroll the panel to this y  // on-canvas spin button + speed slider for 3D panes
     bool inVisible(ImVec2 p) const { return p.x >= visRect_.x && p.x < visRect_.z && p.y >= visRect_.y && p.y < visRect_.w; }
     void initPane();            // defaults for a freshly created pane
     void applyFit();
@@ -389,6 +417,7 @@ public:
 
     // ---- UI (panel.cpp)
     void setupStyle();
+    void applyThemeColors();
     void drawPanel();
     void drawOverlay(ImDrawList* dl);
 

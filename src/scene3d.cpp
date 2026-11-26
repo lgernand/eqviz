@@ -84,7 +84,7 @@ struct Builder {
 };
 
 ImU32 heightColor(float t, float a) {
-    static const int stops[] = {BLUE_E, BLUE_C, GREEN_C, YELLOW_C, RED_C};
+    const int stops[] = {BLUE_E, BLUE_C, GREEN_C, YELLOW_C, RED_C};
     t = std::clamp(t, 0.f, 1.f) * 4.f;
     int i = std::min(3, (int)t);
     return lerpCol(col(stops[i], a), col(stops[i + 1], a), t - i);

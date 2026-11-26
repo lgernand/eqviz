@@ -14,11 +14,13 @@ using eq::NodeP;
 using eq::Op;
 
 static ImFont* gFont = nullptr;
+static ImFont* gItalic = nullptr;
 static bool gMathAlnum = false;
 
-void init(ImFont* f, bool mathAlnum) {
+void init(ImFont* f, bool mathAlnum, ImFont* italic) {
     gFont = f;
     gMathAlnum = mathAlnum;
+    gItalic = mathAlnum ? nullptr : italic;
 }
 
 static ImFont* font() { return gFont ? gFont : ImGui::GetFont(); }
@@ -32,6 +34,21 @@ static void append(Box& dst, const Box& src, float dx, float dy) {
         for (auto& q : p.pts) { q.x += dx; q.y += dy; }
         dst.prims.push_back(std::move(p));
     }
+}
+
+static Box textF(const std::string& s, float size, ImFont* f) {
+    size = qs(size);
+    Box b;
+    b.w = (f ? f : font())->CalcTextSizeA(size, FLT_MAX, 0.f, s.c_str()).x;
+    b.asc = 0.72f * size;
+    b.desc = 0.22f * size;
+    Prim p;
+    p.kind = Prim::Text;
+    p.size = size;
+    p.s = s;
+    p.font = f;
+    b.prims.push_back(std::move(p));
+    return b;
 }
 
 Box text(const std::string& s, float size) {
@@ -89,11 +106,11 @@ Box ident(const std::string& full, float size) {
         base = full.substr(0, us);
         sub = full.substr(us + 1);
     }
-    Box b = text(italicize(base), size);
+    Box b = gItalic ? textF(italicize(base), size, gItalic) : text(italicize(base), size);
     b.w += 0.04f * size;  // italic correction
     if (!sub.empty()) {
         bool digits = std::all_of(sub.begin(), sub.end(), [](unsigned char c) { return std::isdigit(c); });
-        Box s = digits ? text(sub, size * 0.7f) : text(italicize(sub), size * 0.7f);
+        Box s = digits ? text(sub, size * 0.7f) : (gItalic ? textF(italicize(sub), size * 0.7f, gItalic) : text(italicize(sub), size * 0.7f));
         float d = 0.2f * size;
         Box r = b;
         append(r, s, b.w - 0.02f * size, d);
@@ -515,9 +532,10 @@ void draw(ImDrawList* dl, const Box& b, ImVec2 o, ImU32 col) {
     for (const Prim& p : b.prims) {
         switch (p.kind) {
             case Prim::Text: {
-                ImFontBaked* baked = f->GetFontBaked(p.size);
+                ImFont* pf = p.font ? p.font : f;
+                ImFontBaked* baked = pf->GetFontBaked(p.size);
                 float asc = baked ? std::round(baked->Ascent) : p.size * 0.8f;
-                dl->AddText(f, p.size, ImVec2(o.x + p.a.x, o.y + p.a.y - asc), col, p.s.c_str());
+                dl->AddText(pf, p.size, ImVec2(o.x + p.a.x, o.y + p.a.y - asc), col, p.s.c_str());
                 break;
             }
             case Prim::Line:

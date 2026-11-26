@@ -54,6 +54,9 @@ add_executable(eqviz
   src/layout.cpp
   src/demos.cpp
   src/gpu.cpp
+  src/themes.cpp
+  src/fonts.cpp
+  src/appearance.cpp
   src/expr.cpp
   src/typeset.cpp)
 if(APPLE)

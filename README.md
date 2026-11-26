@@ -79,6 +79,20 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`, and two-argument `mod(a, m)` and `legendre(a, p)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 
+## Appearance
+
+The **Appearance** section at the bottom of the panel sets:
+- **Theme**: 3Blue1Brown (default), Chalkboard, Paper (light), Solarized, Neon, High contrast,
+  or **Custom**: open *Customise colours* to change the background, text, grid, accent and
+  curve colours. Existing curves follow the theme's palette.
+- **Interface font** (Avenir Next, Helvetica Neue, Charter, Iowan Old Style, New York, Menlo) and
+  **equation font** (STIX Two, Charter, Palatino, Baskerville, Iowan Old Style, New York, Georgia,
+  Times New Roman, Avenir Next), with a live preview. Text fonts set variables in their italic
+  face and symbols fall back to STIX Two Math.
+- **Panel text** and **equation size** scales.
+
+Choices are saved to `~/Library/Application Support/eqviz/settings.txt`.
+
 ## Build
 
 macOS (Homebrew):
@@ -148,6 +162,7 @@ Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum 
 | `src/scene2d.cpp` | number plane, adaptive curve sampling, warped complex grid, domain colouring |
 | `src/scene3d.cpp` | camera, surface meshes, painter's-algorithm depth sorting |
 | `src/panel.cpp` | control panel and on-canvas equation labels |
+| `src/themes.cpp`, `src/fonts.cpp`, `src/appearance.cpp` | colour themes, font choices, Appearance section and settings |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |
 | `src/app.*` | state, animations, input, mode transitions |
