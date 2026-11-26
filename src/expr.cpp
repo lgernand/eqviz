@@ -1,6 +1,7 @@
 #include "expr.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstring>
@@ -86,6 +87,7 @@ static const FnEntry kFns[] = {
     {"Gamma", Fn::Gamma, false}, {"zeta", Fn::Zeta, false},
     {"isprime", Fn::IsPrime, false}, {"mobius", Fn::Mobius, false}, {"zetazero", Fn::ZetaZero, false},
     {"Ei", Fn::Ei, false}, {"li", Fn::Li, false}, {"erf", Fn::Erf, true}, {"erfc", Fn::Erfc, true},
+    {"primepi", Fn::PrimePi, false},
 };
 static bool lookupFn(const std::string& w, Fn& out) {
     for (auto& f : kFns) if (w == f.name) { out = f.fn; return true; }
@@ -105,7 +107,7 @@ const char* fnDisplayName(Fn f) {
         case Fn::Sign: return "sgn"; case Fn::Gamma: return "Gamma"; case Fn::Zeta: return "zeta";
         case Fn::IsPrime: return "isprime"; case Fn::Mobius: return "mobius";
         case Fn::ZetaZero: return "zetazero"; case Fn::Ei: return "Ei"; case Fn::Li: return "li";
-        case Fn::Erf: return "erf"; case Fn::Erfc: return "erfc";
+        case Fn::Erf: return "erf"; case Fn::Erfc: return "erfc"; case Fn::PrimePi: return "primepi";
     }
     return "?";
 }
@@ -740,7 +742,7 @@ static NodeP fnPrime(Fn f, const NodeP& u) {
         case Fn::Sqrt: return bin(Op::Div, one, bin(Op::Mul, two, func(Fn::Sqrt, u)));
         case Fn::Abs: return func(Fn::Sign, u);
         case Fn::Floor: case Fn::Ceil: case Fn::Round: case Fn::Sign: return num(0);
-        case Fn::IsPrime: case Fn::Mobius: case Fn::ZetaZero: return num(0);
+        case Fn::IsPrime: case Fn::Mobius: case Fn::ZetaZero: case Fn::PrimePi: return num(0);
         case Fn::Ei: return bin(Op::Div, func(Fn::Exp, u), u);
         case Fn::Erf: return bin(Op::Mul, bin(Op::Div, two, func(Fn::Sqrt, cnst("pi"))), func(Fn::Exp, neg(bin(Op::Pow, u, two))));
         case Fn::Erfc: return neg(bin(Op::Mul, bin(Op::Div, two, func(Fn::Sqrt, cnst("pi"))), func(Fn::Exp, neg(bin(Op::Pow, u, two)))));
@@ -822,6 +824,11 @@ int Program::compile(const NodeP& n) {
             in.a = compile(n->kids[0]);
             in.b = compile(n->kids[1]);
             in.c = compile(n->kids[2]);
+            {
+                const NodeP& body = n->kids[2];
+                in.primeCount = n->op == Op::Sum && body->op == Op::Func && body->fn == Fn::IsPrime &&
+                                body->kids[0]->op == Op::Var && body->kids[0]->name == n->name;
+            }
             break;
         case Op::NumDeriv:
             in.slot = slotFor(n->name);
@@ -956,14 +963,41 @@ cplx zetaC(cplx s) {
 
 // ---- number theory
 
-bool isPrimeInt(double v) {
-    if (!(v >= 2) || v != std::floor(v) || v > 9e15) return false;
-    long long n = (long long)v;
-    if (n < 4) return true;
-    if (n % 2 == 0 || n % 3 == 0) return false;
-    for (long long d = 5; d * d <= n; d += 6)
-        if (n % d == 0 || n % (d + 2) == 0) return false;
+// Deterministic Miller-Rabin for 64-bit integers (these bases are exact below 2^64).
+static uint64_t mulmod(uint64_t a, uint64_t b, uint64_t m) { return (unsigned __int128)a * b % m; }
+static uint64_t powmod(uint64_t a, uint64_t e, uint64_t m) {
+    uint64_t r = 1;
+    a %= m;
+    while (e) {
+        if (e & 1) r = mulmod(r, a, m);
+        a = mulmod(a, a, m);
+        e >>= 1;
+    }
+    return r;
+}
+bool isPrimeU64(uint64_t n) {
+    if (n < 2) return false;
+    for (uint64_t p : {2ull, 3ull, 5ull, 7ull, 11ull, 13ull, 17ull, 19ull, 23ull, 29ull, 31ull, 37ull}) {
+        if (n % p == 0) return n == p;
+    }
+    uint64_t d = n - 1;
+    int sCount = 0;
+    while ((d & 1) == 0) { d >>= 1; ++sCount; }
+    for (uint64_t a : {2ull, 325ull, 9375ull, 28178ull, 450775ull, 9780504ull, 1795265022ull}) {
+        uint64_t x = powmod(a % n, d, n);
+        if (x == 0 || x == 1 || x == n - 1) continue;
+        bool composite = true;
+        for (int r = 1; r < sCount; ++r) {
+            x = mulmod(x, x, n);
+            if (x == n - 1) { composite = false; break; }
+        }
+        if (composite) return false;
+    }
     return true;
+}
+bool isPrimeInt(double v) {
+    if (!(v >= 2) || v != std::floor(v) || v > 9007199254740992.0) return false;  // exact integers only (2^53)
+    return isPrimeU64((uint64_t)v);
 }
 
 double mobiusInt(double v) {
@@ -1134,6 +1168,7 @@ cplx cfunc(Fn f, cplx a) {
             return k > 0 ? z[i] : -z[i];
         }
         case Fn::Ei: return eiC(a);
+        case Fn::PrimePi: return primePi(x);
         case Fn::Erf: return r ? cplx(std::erf(x)) : NaNc;   // real arguments only
         case Fn::Erfc: return r ? cplx(std::erfc(x)) : NaNc;
         case Fn::Li:
@@ -1254,8 +1289,13 @@ cplx Program::ev(int i, Ctx& c) const {
             if (!r.hiInf) r.hi = std::floor(hi + 1e-9);
             const double lim = in.animated ? std::max(0.0, c.lim) : INFINITY;
             if (!r.loInf && !r.hiInf) {
-                double count = std::min(r.hi - r.lo + 1, 100000.0);
-                if (count <= 0) return ident;
+                double full = r.hi - r.lo + 1;
+                if (full <= 0) return ident;
+                if (in.primeCount && lim >= full) {  // counting primes: pi(hi) - pi(lo - 1)
+                    double a = primePi(r.hi), b = primePi(r.lo - 1);
+                    if (std::isfinite(a) && std::isfinite(b)) return a - b;
+                }
+                double count = std::min(full, 1e7);
                 return partialSum(in, c, r, std::min(lim, count), count);
             }
             const double cap = std::max(1, c.animTerms);
@@ -1430,4 +1470,120 @@ double zetaZero(int k) {
 }
 int zetaZeroCount() { return (int)zeroTable().size(); }
 void warmZetaZeros() { (void)zeroTable(); }
+}  // namespace eq
+
+// ---------------------------------------------------------------- prime counting
+
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+
+namespace eq {
+namespace {
+
+// Odd-only segmented sieve. Segment k covers [k*S, (k+1)*S); bit j <-> k*S + 2j + 1.
+constexpr uint64_t kSeg = 1u << 18;
+constexpr uint64_t kWords = kSeg / 2 / 64;
+constexpr double kPiLimit = 2e9;
+
+const std::vector<uint32_t>& basePrimes() {  // odd primes up to sqrt(kPiLimit)
+    static const std::vector<uint32_t> ps = [] {
+        const uint32_t lim = 44800;
+        std::vector<char> comp(lim + 1, 0);
+        std::vector<uint32_t> v;
+        for (uint32_t i = 3; i <= lim; i += 2) {
+            if (comp[i]) continue;
+            v.push_back(i);
+            for (uint64_t j = (uint64_t)i * i; j <= lim; j += 2 * i) comp[j] = 1;
+        }
+        return v;
+    }();
+    return ps;
+}
+
+void sieveSegment(uint64_t k, std::vector<uint64_t>& bits) {
+    bits.assign(kWords, ~0ull);
+    const uint64_t lo = k * kSeg, hi = lo + kSeg;
+    for (uint32_t p : basePrimes()) {
+        uint64_t pp = (uint64_t)p * p;
+        if (pp >= hi) break;
+        uint64_t start = std::max(pp, (lo + p - 1) / p * p);
+        if ((start & 1) == 0) start += p;  // odd multiples only
+        for (uint64_t m = start; m < hi; m += 2 * p) {
+            uint64_t j = (m - lo - 1) / 2;
+            bits[j >> 6] &= ~(1ull << (j & 63));
+        }
+    }
+    if (k == 0) bits[0] &= ~1ull;  // 1 is not prime
+}
+
+uint64_t popcountPrefix(const std::vector<uint64_t>& bits, uint64_t jmax) {  // bits [0, jmax]
+    uint64_t c = 0, w = jmax >> 6;
+    for (uint64_t i = 0; i < w; ++i) c += __builtin_popcountll(bits[i]);
+    uint64_t rem = (jmax & 63) + 1;
+    uint64_t mask = rem == 64 ? ~0ull : ((1ull << rem) - 1);
+    return c + __builtin_popcountll(bits[w] & mask);
+}
+
+std::mutex g_piMutex;
+std::vector<uint64_t> g_prefix = {0};  // g_prefix[k] = odd primes below k * kSeg
+std::unordered_map<uint64_t, std::shared_ptr<const std::vector<uint64_t>>> g_segCache;
+
+std::shared_ptr<const std::vector<uint64_t>> segment(uint64_t k) {
+    {
+        std::lock_guard<std::mutex> lk(g_piMutex);
+        auto it = g_segCache.find(k);
+        if (it != g_segCache.end()) return it->second;
+    }
+    auto bits = std::make_shared<std::vector<uint64_t>>();
+    sieveSegment(k, *bits);
+    std::lock_guard<std::mutex> lk(g_piMutex);
+    if (g_segCache.size() > 512) g_segCache.clear();
+    g_segCache[k] = bits;
+    return bits;
+}
+
+void ensurePrefix(uint64_t K) {  // make g_prefix[K] available (counts every segment below K)
+    std::lock_guard<std::mutex> lk(g_piMutex);
+    uint64_t have = g_prefix.size() - 1;
+    if (K <= have) return;
+    std::vector<uint64_t> counts(K - have, 0);
+    unsigned nt = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
+    std::vector<std::thread> th;
+    std::atomic<uint64_t> next{have};
+    for (unsigned t = 0; t < nt; ++t)
+        th.emplace_back([&] {
+            std::vector<uint64_t> bits;
+            for (;;) {
+                uint64_t k = next++;
+                if (k >= K) break;
+                sieveSegment(k, bits);
+                uint64_t c = 0;
+                for (uint64_t w : bits) c += __builtin_popcountll(w);
+                counts[k - have] = c;
+            }
+        });
+    for (auto& t : th) t.join();
+    for (uint64_t k = have; k < K; ++k) g_prefix.push_back(g_prefix.back() + counts[k - have]);
+}
+
+}  // namespace
+
+double primePi(double x) {
+    if (!(x >= 2)) return std::isnan(x) ? NAN : 0;
+    if (x > kPiLimit) return NAN;
+    uint64_t n = (uint64_t)std::floor(x + 1e-9);
+    uint64_t k = n / kSeg;
+    ensurePrefix(k);
+    uint64_t base;
+    {
+        std::lock_guard<std::mutex> lk(g_piMutex);
+        base = g_prefix[k];
+    }
+    uint64_t total = 1 + base;  // 1 for the prime 2
+    uint64_t lo = k * kSeg;
+    if (n >= lo + 1) total += popcountPrefix(*segment(k), (n - lo - 1) / 2);
+    return (double)total;
+}
+
 }  // namespace eq

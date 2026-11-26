@@ -18,7 +18,7 @@ enum class Op { Num, Const, Var, Add, Sub, Mul, Div, Pow, Neg, Func, Sum, Prod, 
 enum class Fn {
     Sin, Cos, Tan, Sec, Csc, Cot, Asin, Acos, Atan, Sinh, Cosh, Tanh,
     Exp, Ln, Log, Sqrt, Abs, Re, Im, Conj, Arg, Floor, Ceil, Round, Sign, Gamma, Zeta,
-    IsPrime, Mobius, ZetaZero, Ei, Li, Erf, Erfc
+    IsPrime, Mobius, ZetaZero, Ei, Li, Erf, Erfc, PrimePi
 };
 
 struct Node;
@@ -98,7 +98,11 @@ struct Inst {
     int slot = -1;
     cplx val{};
     bool animated = false;
+    bool primeCount = false;  // Sum whose body is isprime(index): evaluated as pi(hi) - pi(lo - 1)
 };
+
+// Number of primes <= x (exact, x up to 2e9; NaN beyond). Uses a cached segmented sieve.
+double primePi(double x);
 
 class Program {
 public:

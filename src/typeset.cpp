@@ -390,6 +390,7 @@ Box layFunc(const NodeP& n, float size, const Ctx& c) {
         case eq::Fn::Gamma: return hcat({text("\xCE\x93", size), parens(lay(a, size, c), size)});
         case eq::Fn::Zeta: return hcat({ident("zeta", size), parens(lay(a, size, c), size)});
         case eq::Fn::Mobius: return hcat({ident("mu", size), parens(lay(a, size, c), size)});
+        case eq::Fn::PrimePi: return hcat({ident("pi", size), parens(lay(a, size, c), size)});
         case eq::Fn::ZetaZero: {  // gamma_k: imaginary part of the k-th zero
             Box g = ident("gamma", size);
             Box s = lay(a, std::max(c.minSize, size * 0.7f), c);

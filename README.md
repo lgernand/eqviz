@@ -60,7 +60,9 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
 - **Navier–Stokes demo** (Project, then Open): exact viscous flows driven by time t and
   viscosity ν: the decaying Taylor–Green vortex, a diffusing Lamb–Oseen vortex and its swirl
   profile, Stokes' suddenly started plate (u = erfc(y / 2√(νt))), and Poiseuille/Couette flows.
-- **Number theory and special functions**: `isprime(n)`, `mobius(n)`, `zetazero(k)` (the
+- **Number theory and special functions**: `isprime(n)` (deterministic Miller–Rabin, exact
+  up to 2⁵³), `primepi(x)` (exact prime count up to 2×10⁹ from a cached segmented sieve;
+  `sum(k, a, b, isprime(k))` is evaluated with it automatically), `mobius(n)`, `zetazero(k)` (the
   k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 

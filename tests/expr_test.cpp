@@ -195,6 +195,18 @@ int main() {
     check("erf(0.5) + erfc(0.5)", {}, 1);
     check("erf(1)", {}, 0.8427007929497149);
     check("erfc(x)", {{"x", 0.3}}, -2 / std::sqrt(PI) * std::exp(-0.09), true);
+    // large primes and prime counting
+    check("isprime(1000000007) + isprime(1000000009) + isprime(1000000011)", {}, 2);
+    check("isprime(2147483647)", {}, 1);
+    check("isprime(9007199254740881)", {}, 1);
+    check("primepi(100000)", {}, 9592);
+    check("primepi(1000000)", {}, 78498);
+    check("primepi(10000000)", {}, 664579);
+    check("primepi(100000000)", {}, 5761455);
+    check("primepi(1000000000)", {}, 50847534);
+    check("sum(n, 1, x, isprime(n))", {{"x", 2000000.5}}, 148933);        // fast path, past the old cap
+    check("sum(n, 1000, x, isprime(n))", {{"x", 100000.0}}, 9592 - 168);
+    check("sum(n, 1, x, 1)", {{"x", 250000.0}}, 250000);                  // ordinary sums: cap now 1e7
     checkError("sin(");
     checkError("2 + * 3");
     checkError("sum(1, 2)");

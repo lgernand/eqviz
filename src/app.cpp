@@ -243,6 +243,10 @@ void App::applyActive(const eq::NodeP& plot, bool sameRow) {
     std::vector<const eq::Node*> sums;
     eq::collectAnimatedSums(expr_, sums);
     hasSum_ = !sums.empty();
+    if (hasSum_) {  // bounds that move with x or y (like sum(n, 1, x, ...)) are not a series to step through
+        for (const char* v : {"x", "y"})
+            if (eq::dependsOn(sums[0]->kids[0], v) || eq::dependsOn(sums[0]->kids[1], v)) hasSum_ = false;
+    }
     if (hasSum_) {
         sumLoF_ = Func{eq::Program(sums[0]->kids[0]), {}};
         sumHiF_ = Func{eq::Program(sums[0]->kids[1]), {}};
@@ -360,7 +364,7 @@ int App::computeSumCount() {
     if (sumInfinite_) return animTerms_ + 1;  // N animated partial sums, then the step to the limit
     lo = std::ceil(lo - 1e-9);
     hi = std::floor(hi + 1e-9);
-    return (int)std::clamp(hi - lo + 1, 0.0, 100000.0);
+    return (int)std::clamp(hi - lo + 1, 0.0, 1e7);
 }
 
 double App::sumLimit() const {
