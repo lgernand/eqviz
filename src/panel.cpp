@@ -381,7 +381,11 @@ void App::drawPanel() {
             const char* modes[] = {"Checkerboard", "By height"};
             ImGui::Combo("##cm", &colorMode_, modes, 2);
         }
-        ImGui::Checkbox("Auto-rotate camera", &autoRotate_);
+        ImGui::Checkbox("Rotate around z", &autoRotate_);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-1);
+        ImGui::SliderFloat("##rotspd", &rotateSpeed_, -90.f, 90.f, "%.1f\xC2\xB0/s");
+        ImGui::SetItemTooltip("Rotation speed in degrees per second (negative turns the other way)");
         if (deriv_ && !complex_) {
             labelRow("Point  x\xE2\x82\x80", 110);
             ImGui::SliderFloat("##px", &probeX_, (float)(domainCx_ - domainR_), (float)(domainCx_ + domainR_), "%.3f");

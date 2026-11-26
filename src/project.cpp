@@ -387,7 +387,8 @@ bool App::saveProject(const std::string& path) {
         for (size_t r = 0; r < funcs_.size(); ++r)
             if (!rowVisible(funcs_[r])) hidden += (hidden.empty() ? "" : ",") + std::to_string(r);
         out << "pane\t" << (complex_ ? 1 : 0) << "\t" << (threeD_ ? 1 : 0) << "\t" << active_ << "\t" << view_.cx << "\t"
-            << view_.cy << "\t" << view_.scale << "\t" << view_.aspect << "\t" << (hidden.empty() ? "-" : hidden) << "\n";
+            << view_.cy << "\t" << view_.scale << "\t" << view_.aspect << "\t" << (hidden.empty() ? "-" : hidden) << "\t"
+            << (autoRotate_ ? 1 : 0) << "\t" << rotateSpeed_ << "\n";
     }
     enterPane(start);
     enterPane(focus_);
@@ -411,7 +412,7 @@ bool App::loadProject(const std::string& path) {
     std::vector<Param> ps;
     std::vector<int> fnVisible;
     std::vector<std::pair<int, std::string>> labels;
-    struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; };
+    struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; bool rotate = false; float rotSpeed = 10; };
     std::vector<PaneSpec> paneSpecs;
     int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
     std::vector<LayoutNode> tree;
@@ -460,6 +461,7 @@ bool App::loadProject(const std::string& path) {
                 PaneSpec p;
                 p.complex = f[1] == "1"; p.threeD = f[2] == "1"; p.active = std::stoi(f[3]);
                 p.cx = std::stod(f[4]); p.cy = std::stod(f[5]); p.s = std::stod(f[6]); p.a = std::stod(f[7]);
+                if (f.size() > 10) { p.rotate = f[9] == "1"; p.rotSpeed = std::stof(f[10]); }
                 if (f[8] != "-") {
                     std::stringstream hs(f[8]);
                     std::string item;
@@ -513,6 +515,8 @@ bool App::loadProject(const std::string& path) {
         for (int r : p.hidden)
             if (r >= 0 && r < (int)funcs_.size()) hiddenRows_.insert(funcs_[r].id);
         want3D_ = p.threeD && !threeD_;
+        autoRotate_ = p.rotate;
+        rotateSpeed_ = p.rotSpeed;
         if (complex_ && !p.threeD) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
     }
     extendWorkspace_ = wsExtend;

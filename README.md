@@ -116,6 +116,7 @@ ad-hoc signed, so a copy sent to another Mac needs right-click, then Open, the f
 | Two-finger scroll (trackpad) | pan, or scroll the workspace when it extends past the window | pan, or scroll the workspace |
 | Pinch (trackpad) | zoom about the cursor | zoom |
 | Mouse wheel | zoom about the cursor | zoom |
+| ⟳ Rotate (3D panes, bottom-left) | | spin around the z-axis; drag its slider for the speed (°/s, negative reverses) |
 | Scrollbars | click the track to page, drag the thumb to scroll | |
 
 On macOS the app reads native trackpad events to tell two-finger scrolling from a mouse wheel

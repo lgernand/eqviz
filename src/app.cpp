@@ -239,6 +239,7 @@ void App::frame(float dt) {
         else drawScene2D(dl);
         drawOverlay(dl);
         dl->PopClipRect();
+        if (threeD_ && !dimAnimating_) drawRotateControl(i);
     }
     drawLayoutChrome(dl);
     dl->PopClipRect();
@@ -644,6 +645,44 @@ void App::hoverLabel(ImDrawList* dl, ImVec2 at, const ts::Box& b, ImU32 accent) 
     ts::draw(dl, b, p, theme::col(theme::WHITE));
 }
 
+void App::drawRotateControl(int pane) {
+    const float pad = 12, h = 34;
+    const bool narrow = canvasMax_.x - canvasMin_.x < 330;
+    const float y = canvasMax_.y - pad - h - (extendWorkspace_ ? 12 : 0);
+    if (y < canvasMin_.y + 40 || canvasMin_.x + pad > visRect_.z - 60 || y > visRect_.w - h) return;
+    ImGui::SetNextWindowPos(ImVec2(canvasMin_.x + pad, y));
+    ImGui::SetNextWindowBgAlpha(0.f);
+    char id[32];
+    snprintf(id, sizeof id, "##spin%d", pane);
+    ImGui::Begin(id, nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::PushFont(fonts_.ui, 15.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 9);
+    const ImVec4 off(0.09f, 0.10f, 0.125f, 0.9f), on = theme::colv(theme::BLUE_E, 0.95f);
+    ImGui::PushStyleColor(ImGuiCol_Button, autoRotate_ ? on : off);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, autoRotate_ ? theme::colv(theme::BLUE_D, 0.95f) : ImVec4(0.15f, 0.17f, 0.21f, 0.95f));
+    const char* label = autoRotate_ ? (narrow ? "\xE2\x9F\xB3" : "\xE2\x9F\xB3  Rotating") : (narrow ? "\xE2\x9F\xB3" : "\xE2\x9F\xB3  Rotate");
+    if (ImGui::Button(label, ImVec2(narrow ? h : 0, h))) { autoRotate_ = !autoRotate_; focus_ = pane; }
+    ImGui::PopStyleColor(2);
+    ImGui::SetItemTooltip(autoRotate_ ? "Stop rotating around the z-axis" : "Rotate continuously around the z-axis");
+    if (autoRotate_) {
+        ImGui::SameLine(0, 6);
+        ImGui::SetNextItemWidth(narrow ? 110 : 170);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, off);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, (h - ImGui::GetFontSize()) * 0.5f));
+        if (ImGui::SliderFloat("##spd", &rotateSpeed_, -90.f, 90.f, "%.1f\xC2\xB0/s")) focus_ = pane;
+        ImGui::SetItemTooltip("Rotation speed in degrees per second (negative turns the other way).\n"
+                              "Drag to adjust; Cmd-click to type an exact value; double-click to reset to 10\xC2\xB0/s.");
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) rotateSpeed_ = 10.f;
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopFont();
+    ImGui::End();
+}
+
 // ------------------------------------------------------------------ input
 
 void App::handleInput(float dt) {
@@ -728,7 +767,7 @@ void App::handleInput(float dt) {
         }
         double k = 1 - std::exp(-dt * 12.0);
         cam_.s.dist = std::exp(std::log(cam_.s.dist) + (std::log(targetDist_) - std::log(cam_.s.dist)) * k);
-        if (autoRotate_ && !orbiting_) cam_.s.theta += dt * 0.16;
+        if (autoRotate_ && !orbiting_) cam_.s.theta += dt * rotateSpeed_ * (PI / 180.0);
     }
 
 }
