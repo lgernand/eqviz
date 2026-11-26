@@ -259,6 +259,19 @@ std::string fmtNum(double v, int sig) {
     if (std::isinf(v)) return v > 0 ? "\xE2\x88\x9E" : std::string(MINUS) + "\xE2\x88\x9E";
     char b[64];
     double av = std::fabs(v);
+    if (av >= 1e6 || (av > 0 && av < 1e-4)) {  // a x 10^n with superscript digits
+        int e = (int)std::floor(std::log10(av));
+        double m = av / std::pow(10.0, e);
+        if (m >= 9.9995) { m /= 10; ++e; }
+        snprintf(b, sizeof b, "%.*g", std::max(1, sig - 1), m);
+        std::string s = std::string(b) == "1" ? "" : std::string(b) + "\xC3\x97";
+        s += "10";
+        static const char* sup[] = {"\xE2\x81\xB0", "\xC2\xB9", "\xC2\xB2", "\xC2\xB3", "\xE2\x81\xB4",
+                                    "\xE2\x81\xB5", "\xE2\x81\xB6", "\xE2\x81\xB7", "\xE2\x81\xB8", "\xE2\x81\xB9"};
+        if (e < 0) s += "\xE2\x81\xBB";  // superscript minus
+        for (char c : std::to_string(std::abs(e))) s += sup[c - '0'];
+        return (v < 0 ? std::string(MINUS) : std::string()) + s;
+    }
     double r = std::round(av);
     if (std::fabs(av - r) < 1e-9 * std::max(1.0, av) && av < 1e15) snprintf(b, sizeof b, "%.0f", r);
     else {

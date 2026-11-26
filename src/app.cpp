@@ -643,7 +643,7 @@ void App::handleInput(float dt) {
         if (zoomBy != 1) {
             zoomAnchorS_ = m;
             view_.s2w(m, zoomAnchorX_, zoomAnchorY_);
-            targetScale_ = std::clamp(targetScale_ * zoomBy, 1.0, 50000.0);
+            targetScale_ = std::clamp(targetScale_ * zoomBy, 1e-6, 1e8);  // ~1e9 units across .. ~1e-5
             if (plat_.magnify != 0 && io.MouseWheel == 0) {  // pinches track the fingers directly
                 view_.scale = targetScale_;
                 ImVec2 c = view_.center();
@@ -684,9 +684,9 @@ void App::handleInput(float dt) {
             }
         }
         if (overCanvas && io.MouseWheel != 0 && !plat_.trackpad)
-            targetDist_ = std::clamp(targetDist_ * std::pow(0.88, (double)io.MouseWheel), 0.5, 2000.0);
+            targetDist_ = std::clamp(targetDist_ * std::pow(0.88, (double)io.MouseWheel), 0.05, 1e6);
         if (overCanvas && plat_.magnify != 0) {
-            targetDist_ = std::clamp(targetDist_ / std::max(0.2, 1.0 + plat_.magnify), 0.5, 2000.0);
+            targetDist_ = std::clamp(targetDist_ / std::max(0.2, 1.0 + plat_.magnify), 0.05, 1e6);
             cam_.s.dist = targetDist_;
         }
         if (overCanvas && plat_.trackpad && !extendWorkspace_ && (plat_.scrollX != 0 || plat_.scrollY != 0)) {

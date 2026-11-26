@@ -99,12 +99,14 @@ void App::drawPlane2D(ImDrawList* dl, float la, bool labels) {
     ImU32 lc = col(WHITE, 0.85f);
     float axisY = std::clamp(o.y, v.cmin.y + 4, v.cmax.y - 28);
     float axisX = std::clamp(o.x, v.cmin.x + 48, v.cmax.x - 6);
+    float lastRight = -1e30f;
     for (long j = (long)std::ceil(x0 / step); j <= (long)std::floor(x1 / step); ++j) {
         if (j == 0) continue;
         double val = j * step;
         ts::Box b = ts::text(ts::fmtNum(val, 6), ls);
         float bx = v.w2s(val, 0).x - b.w * 0.5f;
-        if (bx < v.cmin.x + 2 || bx + b.w > v.cmax.x - 2) continue;
+        if (bx < v.cmin.x + 2 || bx + b.w > v.cmax.x - 2 || bx < lastRight + 10) continue;  // no overlaps
+        lastRight = bx + b.w;
         ts::draw(dl, b, ImVec2(bx, axisY + 22), lc);
     }
     for (long j = (long)std::ceil(y0 / stepY); j <= (long)std::floor(y1 / stepY); ++j) {
