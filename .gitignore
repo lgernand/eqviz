@@ -1,0 +1,4 @@
+build/
+dist/
+*.bmp
+.DS_Store

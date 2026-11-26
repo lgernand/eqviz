@@ -1,0 +1,117 @@
+# eqviz: equation visualizer
+
+A C++17 tool for exploring equations, styled after manim / 3Blue1Brown videos: a dark
+background, a blue number plane, crisp yellow curves, TeX-style typeset labels and smooth
+"smooth"-eased animations.
+
+## Features
+
+- **Equation input** with implicit multiplication (`2x`, `a sin(bx)`), `^`, `!`, `|x|`, `sqrt`,
+  trig/hyperbolic/log functions, `pi`, `e`, `i`, `gamma(x)`, `zeta(s)`, and `y = …` / `f(x) = …` forms.
+- **Sliders for variables**: any unknown letter (`a`, `omega`, `a_1`) becomes a slider.
+  Each one has a ▶ button that sweeps it back and forth, and its range can be edited.
+- **Real axes ⇄ complex plane**: on the complex plane, `f(z)` is shown 3b1b-style as a grid
+  being transformed by the function, with the real axis (yellow) and imaginary axis (red)
+  tracked. Domain colouring is optional.
+- **2D ⇄ 3D**: an animated camera move tilts the plane up while the surface rises out of it.
+  Real mode plots `z = f(x, y)` as a checkerboard manim surface; complex mode plots the
+  analytic landscape `|f(z)|`, coloured by `arg f(z)`.
+- **First derivative**: computed symbolically and typeset.
+  - Real 2D: `f′` curve plus a draggable tangent line with a live slope readout.
+  - Real 3D: `∂f/∂x`, `∂f/∂y` and the tangent plane at a chosen point.
+  - Complex: the view morphs from `f(z)` to `f′(z)`.
+- **Summation / products**: `sum(k, 1, n, 1/k^2)` (or `sum(k=1, n, …)`, `prod(…)`). A player
+  adds the terms one at a time with smooth morphs between partial sums. You set the loop
+  speed in terms per second (optionally accelerating), and can play, pause, step, reset,
+  show all, or loop. In 2D the previous partial sums trail behind.
+- **Infinite series**: use `inf` (or `∞`) as a bound: `sum(k, 0, inf, x^k)`, or over all
+  integers with `sum(n, -inf, inf, …)`. The player animates the first N partial sums, then
+  glides to the true limit. Limits are computed by sampling partial sums at doubling
+  checkpoints and extrapolating the tail geometrically. That converges p-series and
+  Dirichlet series like `sum 1/n^z` in a few hundred terms. Where a series diverges (e.g.
+  `x^k` for |x| ≥ 1, `1/n^z` for Re z ≤ 1) or does not settle within *Max terms*, the graph
+  is left blank, so the region of convergence shows up directly.
+- **Riemann zeta**: `zeta(s)` is the full analytic continuation (Borwein's accelerated
+  series, plus the functional equation for Re s < 0), accurate to ~1e-15 near the critical
+  line. The examples include the critical line |ζ(1/2 + ix)|, the complex grid transformed
+  by ζ, ζ as the series Σ 1/nᶻ, and the landscape around the first zero.
+- **Projects with multiple functions**: each row is a function with its own colour and
+  visibility toggle, and all visible rows are drawn together. Name a row (`f(x) = …`,
+  `L(u) = …`, `h(a, b) = …`) and any other row can call it: `g(x) = f(x)^2 + f(2x)`. Calls
+  are inlined before evaluation, with checks for circular definitions and argument counts.
+  The highlighted row drives the sum player, derivative, 3D and complex views. Projects
+  save to and open from `~/Documents/eqviz` (plain text `.eqviz` files).
+- **Multiple coordinate planes**: show 1, 2 (side by side or stacked) or 4 panes. Each pane
+  has its own mode (real or complex, 2D or 3D), view, main function, and visible rows. Click a
+  pane to focus it; the panel then edits that pane. Rows are shared by every pane.
+- **Riemann Hypothesis demo** (Project, then Open): on the left, ζ(z) transforming the
+  complex plane; on the right, the prime staircase π₀(x), Riemann's
+  smooth R(x), |ζ(½ + ix)| touching zero at each γₖ, and the explicit-formula curve
+  π_N(x) = R(x) − Σ 2 Re R(x^ρₖ), built from the first N zeros. The player adds zeros one
+  at a time and the curve locks onto the staircase.
+- **Number theory and special functions**: `isprime(n)`, `mobius(n)`, `zetazero(k)` (the
+  k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`.
+- **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
+
+## Build
+
+macOS (Homebrew):
+
+```bash
+brew install cmake glfw
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+./build/eqviz
+```
+
+Dear ImGui v1.92.9b is vendored in `third_party/imgui`. If GLFW isn't installed, CMake
+fetches it from source. Linux and Windows should also build; the app falls back to other
+fonts there.
+
+Fonts: the UI uses Avenir Next and equations use STIX Two Math, both bundled with macOS.
+
+## Desktop app (macOS)
+
+```bash
+scripts/package_mac.sh --install
+```
+
+This builds `dist/eqviz.app` and a shareable `dist/eqviz.dmg`, and copies the app to
+`~/Applications` (Launchpad, Spotlight, Dock). GLFW is linked statically, so the app runs
+without Homebrew. The icon is rendered by the app itself (`--render-icon`). Builds are
+ad-hoc signed, so a copy sent to another Mac needs right-click, then Open, the first time.
+
+## Controls
+
+| | 2D | 3D |
+|---|---|---|
+| Left-drag | pan (or drag the tangent point) | pan |
+| Right-drag | | orbit |
+| Scroll | zoom about the cursor | zoom |
+
+Keys (when not typing): `Space` play/pause the sum · `D` derivative · `C` real/complex ·
+`3` 2D/3D · `R` reset view.
+
+## Command line
+
+```
+--eq "<expr>"  --complex  --3d  --deriv  --domain-color  --rotate  --size WxH
+--frames N --shot out.bmp     render N frames at 60 fps, save the last one, exit
+--sum-pos T                   freeze the summation player at T terms
+--project FILE                open a saved project, or demo:riemann
+--actions "10:c,90:3,150:d"   scripted toggles at given frames (c, 3, d, p, e<N>)
+--mouse X,Y                   fake cursor position (testing hover readouts)
+```
+
+## Layout
+
+| File | Purpose |
+|---|---|
+| `src/expr.*` | tokenizer, parser, simplifier, symbolic derivative, complex evaluator, infinite-series convergence, zeta |
+| `src/typeset.*` | small TeX-like box layout (fractions, scripts, radicals, Σ with limits) |
+| `src/scene2d.cpp` | number plane, adaptive curve sampling, warped complex grid, domain colouring |
+| `src/scene3d.cpp` | camera, surface meshes, painter's-algorithm depth sorting |
+| `src/panel.cpp` | control panel and on-canvas equation labels |
+| `src/project.cpp` | functions list, calls between rows, save/open, demo project |
+| `src/app.*` | state, animations, input, mode transitions |
+| `tests/expr_test.cpp` | expression engine checks: `cmake --build build --target expr_test && ./build/expr_test` |
