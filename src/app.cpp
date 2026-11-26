@@ -655,10 +655,14 @@ void App::drawRotateControl(int pane) {
     if (!ImGui::IsMouseDown(0) && rotateDragPane_ == pane) rotateDragPane_ = -1;
     const bool activeHere = rotateDragPane_ == pane;  // keep showing while its speed is being dragged
     if (!hovered && !activeHere) return;
-    const float pad = 14;
-    const float y = canvasMax_.y - pad - 22 - (extendWorkspace_ ? 12 : 0);
+    // sit just inside the focus border's bottom-left corner (border is 2 px, inset 1 px)
+    const float inset = 12, rowH = ImGui::GetFontSize() * (14.5f / ImGui::GetFontSize()) + 6;
+    const float bottom = std::min(canvasMax_.y, visRect_.w - (extendWorkspace_ ? 11.f : 0.f));
+    const float y = bottom - inset - rowH;
     if (y < canvasMin_.y + 40) return;
-    ImGui::SetNextWindowPos(ImVec2(canvasMin_.x + pad, y));
+    ImGui::SetNextWindowPos(ImVec2(std::max(canvasMin_.x, visRect_.x) + inset, y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1, 1));
     ImGui::Begin(id, nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -700,6 +704,7 @@ void App::drawRotateControl(int pane) {
     ImGui::PopStyleColor(4);
     ImGui::PopFont();
     ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 // ------------------------------------------------------------------ input
