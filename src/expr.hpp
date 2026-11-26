@@ -18,7 +18,7 @@ enum class Op { Num, Const, Var, Add, Sub, Mul, Div, Pow, Neg, Func, Sum, Prod, 
 enum class Fn {
     Sin, Cos, Tan, Sec, Csc, Cot, Asin, Acos, Atan, Sinh, Cosh, Tanh,
     Exp, Ln, Log, Sqrt, Abs, Re, Im, Conj, Arg, Floor, Ceil, Round, Sign, Gamma, Zeta,
-    IsPrime, Mobius, ZetaZero, Ei, Li
+    IsPrime, Mobius, ZetaZero, Ei, Li, Erf, Erfc
 };
 
 struct Node;

@@ -445,7 +445,7 @@ void App::drawOverlay(ImDrawList* dl) {
             b = ts::hcat({lhs(size), ts::binop("=", size), ts::expr(rhs, size, ren)});
         }
         float base = y + 10 + b.asc;
-        dl->AddRectFilled(ImVec2(x - 14, y), ImVec2(x + b.w + 14, base + b.desc + 10), col(BG, 0.82f), 10);
+        dl->AddRectFilled(ImVec2(x - 14, y), ImVec2(x + b.w + 14, base + b.desc + 10), col(BG, 0.9f), 10);
         ts::draw(dl, b, ImVec2(x, base), c);
         y = base + b.desc + 10 + 8;
     };

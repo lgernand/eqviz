@@ -281,6 +281,77 @@ void App::loadDemoPoincare() {
     rebuildProject(true);
 }
 
+// Navier-Stokes: exact solutions of the incompressible equations
+//   du/dt + (u . grad) u = -grad p / rho + nu lap u,   div u = 0.
+void App::loadDemoNavierStokes() {
+    struct Row { const char* eq; int color; };
+    static const Row rows[] = {
+        {"omega(x, y) = 2 sin(x) sin(y) e^(-2 nu t)", BLUE_C},                              // 0 Taylor-Green vorticity
+        {"psi(x, y) = sin(x) sin(y) e^(-2 nu t)", TEAL_C},                                  // 1 its stream function
+        {"Omega(x, y) = Gamma / (4 pi nu (t + 1)) e^(-(x^2 + y^2) / (4 nu (t + 1)))", PURPLE_C}, // 2 Lamb-Oseen vorticity
+        {"v(r) = Gamma / (2 pi r) (1 - e^(-r^2 / (4 nu (t + 1))))", PURPLE_C},                // 3 its swirl velocity
+        {"u(y) = erfc(y / (2 sqrt(nu (t + 0.05))))", YELLOW_C},                             // 4 Stokes' first problem
+        {"P(y) = G (1 - y^2) / 2", GREEN_C},                                                // 5 Poiseuille channel flow
+        {"C(y) = U (1 + y) / 2", RED_C},                                                    // 6 Couette shear flow
+    };
+    if (threeD_ && !dimAnimating_) startDim(false);
+    setPanes(4, 1);
+    resetForProject();
+    for (const Row& r : rows) {
+        FuncDef d;
+        std::strncpy(d.input, r.eq, sizeof d.input - 1);
+        d.color = r.color;
+        d.id = nextRowId_++;
+        funcs_.push_back(d);
+    }
+    std::strncpy(projName_, "Navier-Stokes", sizeof projName_);
+    projNote_ = "Incompressible flow:  \xE2\x88\x82u/\xE2\x88\x82t + (u\xC2\xB7\xE2\x88\x87)u = "
+                "\xE2\x88\x92\xE2\x88\x87p/\xCF\x81 + \xCE\xBD\xE2\x88\x87\xC2\xB2u,  \xE2\x88\x87\xC2\xB7u = 0. "
+                "Whether smooth 3D solutions always exist is a Millennium Prize problem. Shown here are exact "
+                "solutions: the Taylor\xE2\x80\x93Green vortex (vorticity decays as e^(\xE2\x88\x92" "2\xCE\xBDt)), "
+                "a Lamb\xE2\x80\x93Oseen vortex spreading by diffusion, Stokes' suddenly started plate "
+                "(u = erfc), and steady Poiseuille / Couette channel flows. t is time, \xCE\xBD the viscosity.";
+    auto mk = [](const char* name, float v, float lo, float hi, bool play = false) {
+        Param p;
+        p.name = name; p.value = v; p.min = lo; p.max = hi; p.playing = play;
+        return p;
+    };
+    params_ = {mk("t", 0, 0, 4, true), mk("nu", 0.15f, 0.01f, 1.f), mk("Gamma", 2, 0, 6), mk("G", 1, 0, 4), mk("U", 1, -2, 2)};
+
+    auto hideAllBut = [&](std::initializer_list<int> keep) {
+        hiddenRows_.clear();
+        for (int i = 0; i < (int)funcs_.size(); ++i)
+            if (std::find(keep.begin(), keep.end(), i) == keep.end()) hiddenRows_.insert(funcs_[i].id);
+    };
+    auto setup = [&](int pane, int active, bool want3D, ImVec4 fit) {
+        enterPane(pane);
+        active_ = active;
+        if (threeD_) startDim(false);
+        complex_ = false;
+        fade_ = 1;
+        fadeStage_ = 0;
+        want3D_ = want3D;
+        fitPending_ = true;
+        fitRange_ = fit;
+    };
+    setup(0, 0, true, ImVec4(-6.f, 6.f, -6.f, 6.f));       // Taylor-Green cells decaying
+    colorMode_ = 1;
+    surfRes_ = 80;
+    lockZScale_ = true;
+    zScale_ = 0.7f;
+    setup(1, 2, true, ImVec4(-3.f, 3.f, -3.f, 3.f));       // Lamb-Oseen vortex spreading out
+    colorMode_ = 1;
+    surfRes_ = 80;
+    lockZScale_ = true;
+    zScale_ = 1.8f;
+    setup(2, 4, false, ImVec4(-0.15f, 3.5f, -0.15f, 1.25f));  // boundary layer + swirl profiles
+    hideAllBut({3, 4});
+    setup(3, 5, false, ImVec4(-1.3f, 1.3f, -0.25f, 1.25f));   // channel flows
+    hideAllBut({5, 6});
+    focus_ = 2;
+    rebuildProject(true);
+}
+
 std::string App::projectDir() const {
     const char* home = std::getenv("HOME");
 #ifdef _WIN32
@@ -487,6 +558,7 @@ void App::drawProjectSection() {
         ImGui::TextDisabled("Demo");
         if (ImGui::Selectable("Riemann Hypothesis: primes from zeta zeros")) loadDemoRiemann();
         if (ImGui::Selectable("Poincar\xC3\xA9 conjecture: Ricci flow with surgery")) loadDemoPoincare();
+        if (ImGui::Selectable("Navier\xE2\x80\x93Stokes: exact viscous flows")) loadDemoNavierStokes();
         ImGui::Separator();
         ImGui::TextDisabled("Saved in ~/Documents/eqviz");
         std::vector<fs::path> files;

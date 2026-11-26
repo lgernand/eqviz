@@ -192,6 +192,9 @@ int main() {
             checkV(lbl, evalProject(rh, "pi_N", {{"x", x}, {"N", 100.0}}).real(), primes, 0.05);
         }
     }
+    check("erf(0.5) + erfc(0.5)", {}, 1);
+    check("erf(1)", {}, 0.8427007929497149);
+    check("erfc(x)", {{"x", 0.3}}, -2 / std::sqrt(PI) * std::exp(-0.09), true);
     checkError("sin(");
     checkError("2 + * 3");
     checkError("sum(1, 2)");

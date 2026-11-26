@@ -57,8 +57,11 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   panes driven by the time slider t. A dumbbell's neck pinches off first and the pieces round
   out (schematic: each cross-section follows r² → r² − 4t). A round sphere shrinks to a point
   with radius² = 1 − 4t. Curvature R = 6/ρ² and volume V = 2π²ρ³ are plotted against time.
+- **Navier–Stokes demo** (Project, then Open): exact viscous flows driven by time t and
+  viscosity ν: the decaying Taylor–Green vortex, a diffusing Lamb–Oseen vortex and its swirl
+  profile, Stokes' suddenly started plate (u = erfc(y / 2√(νt))), and Poiseuille/Couette flows.
 - **Number theory and special functions**: `isprime(n)`, `mobius(n)`, `zetazero(k)` (the
-  k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`.
+  k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 
 ## Build
@@ -106,7 +109,7 @@ Keys (when not typing): `Space` play/pause the sum · `D` derivative · `C` real
 --eq "<expr>"  --complex  --3d  --deriv  --domain-color  --rotate  --size WxH
 --frames N --shot out.bmp     render N frames at 60 fps, save the last one, exit
 --sum-pos T                   freeze the summation player at T terms
---project FILE                open a saved project, or demo:riemann
+--project FILE                open a saved project, or demo:riemann / demo:poincare / demo:navier-stokes
 --actions "10:c,90:3,150:d"   scripted toggles at given frames (c, 3, d, p, e<N>)
 --mouse X,Y                   fake cursor position (testing hover readouts)
 ```

@@ -85,7 +85,7 @@ static const FnEntry kFns[] = {
     {"sign", Fn::Sign, false}, {"sgn", Fn::Sign, false}, {"gamma", Fn::Gamma, false},
     {"Gamma", Fn::Gamma, false}, {"zeta", Fn::Zeta, false},
     {"isprime", Fn::IsPrime, false}, {"mobius", Fn::Mobius, false}, {"zetazero", Fn::ZetaZero, false},
-    {"Ei", Fn::Ei, false}, {"li", Fn::Li, false},
+    {"Ei", Fn::Ei, false}, {"li", Fn::Li, false}, {"erf", Fn::Erf, true}, {"erfc", Fn::Erfc, true},
 };
 static bool lookupFn(const std::string& w, Fn& out) {
     for (auto& f : kFns) if (w == f.name) { out = f.fn; return true; }
@@ -105,6 +105,7 @@ const char* fnDisplayName(Fn f) {
         case Fn::Sign: return "sgn"; case Fn::Gamma: return "Gamma"; case Fn::Zeta: return "zeta";
         case Fn::IsPrime: return "isprime"; case Fn::Mobius: return "mobius";
         case Fn::ZetaZero: return "zetazero"; case Fn::Ei: return "Ei"; case Fn::Li: return "li";
+        case Fn::Erf: return "erf"; case Fn::Erfc: return "erfc";
     }
     return "?";
 }
@@ -741,6 +742,8 @@ static NodeP fnPrime(Fn f, const NodeP& u) {
         case Fn::Floor: case Fn::Ceil: case Fn::Round: case Fn::Sign: return num(0);
         case Fn::IsPrime: case Fn::Mobius: case Fn::ZetaZero: return num(0);
         case Fn::Ei: return bin(Op::Div, func(Fn::Exp, u), u);
+        case Fn::Erf: return bin(Op::Mul, bin(Op::Div, two, func(Fn::Sqrt, cnst("pi"))), func(Fn::Exp, neg(bin(Op::Pow, u, two))));
+        case Fn::Erfc: return neg(bin(Op::Mul, bin(Op::Div, two, func(Fn::Sqrt, cnst("pi"))), func(Fn::Exp, neg(bin(Op::Pow, u, two)))));
         case Fn::Li: return bin(Op::Div, one, func(Fn::Ln, u));
         default: return nullptr;
     }
@@ -1131,6 +1134,8 @@ cplx cfunc(Fn f, cplx a) {
             return k > 0 ? z[i] : -z[i];
         }
         case Fn::Ei: return eiC(a);
+        case Fn::Erf: return r ? cplx(std::erf(x)) : NaNc;   // real arguments only
+        case Fn::Erfc: return r ? cplx(std::erfc(x)) : NaNc;
         case Fn::Li:
             if (a == 0.0) return 0.0;
             return eiC(r && x > 0 ? cplx(std::log(x), 0) : std::log(a));

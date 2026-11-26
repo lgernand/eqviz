@@ -320,6 +320,7 @@ public:
     void newProject();
     void loadDemoRiemann();
     void loadDemoPoincare();
+    void loadDemoNavierStokes();
     bool saveProject(const std::string& path);
     bool loadProject(const std::string& path);
     std::string projectDir() const;
