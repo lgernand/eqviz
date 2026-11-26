@@ -368,6 +368,17 @@ Box layNum(eq::cplx v, float size) {
 
 Box layFunc(const NodeP& n, float size, const Ctx& c) {
     const NodeP& a = n->kids[0];
+    if (n->kids.size() == 2) {
+        const NodeP& b = n->kids[1];
+        if (n->fn == eq::Fn::Legendre) {  // Legendre symbol (a / p)
+            float s = std::max(c.minSize, size * 0.9f);
+            Box f = frac(lay(a, s, c), lay(b, s, c), size);
+            f.prims.erase(std::remove_if(f.prims.begin(), f.prims.end(), [](const Prim& p) { return p.kind == Prim::Line; }),
+                          f.prims.end());  // no fraction bar
+            return parens(f, size);
+        }
+        return hcat({layP(a, size, c, prec(a) < 60), binop("mod", size), layP(b, size, c, prec(b) < 60)});
+    }
     switch (n->fn) {
         case eq::Fn::Sqrt: return radical(lay(a, size, c), size);
         case eq::Fn::Abs: return parens(lay(a, size, c), size, '|', '|');

@@ -52,6 +52,7 @@ add_executable(eqviz
   src/scene3d.cpp
   src/project.cpp
   src/layout.cpp
+  src/demos.cpp
   src/expr.cpp
   src/typeset.cpp)
 if(APPLE)

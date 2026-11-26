@@ -50,6 +50,15 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   (real or complex, 2D or 3D), view, main function and visible rows; click a pane to edit it.
   Optionally the workspace can be larger than the window (up to 5× each way); scroll it with
   two fingers on a trackpad or with the scrollbars.
+- **Millennium Prize Problems**: Project, then Open lists one demo project per problem:
+  - **P vs NP**: polynomial n^k against 2ⁿ and n! running times, linear and log scale.
+  - **Hodge conjecture**: the Fermat cubic surface, |w| on the curve w² = z³ − z over ℂ, and
+    its real points (illustrations; the conjecture concerns complex varieties).
+  - **Yang–Mills mass gap**: Coulomb vs Yukawa forces, the gap in E = √(p² + m²), the
+    confining quark potential, and a BPST instanton.
+  - **Birch and Swinnerton-Dyer**: an adjustable elliptic curve, and their original experiment,
+    log ∏ N_p/p against ln ln x for curves of rank 0–3 (point counts via `legendre`).
+  - Riemann, Poincaré and Navier–Stokes, below.
 - **Riemann Hypothesis demo** (Project, then Open): on the left, ζ(z) transforming the
   complex plane; on the right, the prime staircase π₀(x), Riemann's
   smooth R(x), |ζ(½ + ix)| touching zero at each γₖ, and the explicit-formula curve
@@ -65,7 +74,7 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
 - **Number theory and special functions**: `isprime(n)` (deterministic Miller–Rabin, exact
   up to 2⁵³), `primepi(x)` (exact prime count up to 2×10⁹ from a cached segmented sieve;
   `sum(k, a, b, isprime(k))` is evaluated with it automatically), `mobius(n)`, `zetazero(k)` (the
-  k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`.
+  k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`, and two-argument `mod(a, m)` and `legendre(a, p)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 
 ## Build

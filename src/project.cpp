@@ -561,10 +561,14 @@ void App::drawProjectSection() {
     ImGui::SameLine(0, gap);
     if (ImGui::Button("New", ImVec2(bw, 0))) newProject();
     if (ImGui::BeginPopup("##open")) {
-        ImGui::TextDisabled("Demo");
+        ImGui::TextDisabled("Millennium Prize Problems");
+        if (ImGui::Selectable("P vs NP: polynomial vs exponential time")) loadDemoPvsNP();
+        if (ImGui::Selectable("Hodge conjecture: algebraic varieties")) loadDemoHodge();
+        if (ImGui::Selectable("Poincar\xC3\xA9 conjecture: Ricci flow with surgery (solved)")) loadDemoPoincare();
         if (ImGui::Selectable("Riemann Hypothesis: primes from zeta zeros")) loadDemoRiemann();
-        if (ImGui::Selectable("Poincar\xC3\xA9 conjecture: Ricci flow with surgery")) loadDemoPoincare();
+        if (ImGui::Selectable("Yang\xE2\x80\x93Mills existence and mass gap")) loadDemoYangMills();
         if (ImGui::Selectable("Navier\xE2\x80\x93Stokes: exact viscous flows")) loadDemoNavierStokes();
+        if (ImGui::Selectable("Birch and Swinnerton-Dyer: ranks of elliptic curves")) loadDemoBSD();
         ImGui::Separator();
         ImGui::TextDisabled("Saved in ~/Documents/eqviz");
         std::vector<fs::path> files;

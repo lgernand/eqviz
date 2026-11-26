@@ -207,6 +207,12 @@ int main() {
     check("sum(n, 1, x, isprime(n))", {{"x", 2000000.5}}, 148933);        // fast path, past the old cap
     check("sum(n, 1000, x, isprime(n))", {{"x", 100000.0}}, 9592 - 168);
     check("sum(n, 1, x, 1)", {{"x", 250000.0}}, 250000);                  // ordinary sums: cap now 1e7
+    // two-argument built-ins
+    check("mod(17, 5) + mod(-3, 5)", {}, 2 + 2);
+    check("legendre(2, 7) + legendre(3, 7) + legendre(14, 7)", {}, 1 - 1 + 0);
+    checkV("points on y^2 = x^3 - x mod 5", evalProject({"Np(p, A, B) = p + sum(x, 0, p - 1, legendre(4(x^3 + A x + B), p))",
+                                                       "t(x) = Np(5, -1, 0)"}, "t", {{"x", 0.0}}), 7);
+    checkError("mod(5)");
     checkError("sin(");
     checkError("2 + * 3");
     checkError("sum(1, 2)");

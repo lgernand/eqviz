@@ -246,6 +246,10 @@ struct PaneState {
 
 // ------------------------------------------------------------------ app
 
+struct DemoRow;
+struct DemoParam;
+struct DemoPane;
+
 class App {
 public:
     void init(const Fonts& f, const LaunchOptions& o);
@@ -345,6 +349,12 @@ public:
     void loadDemoRiemann();
     void loadDemoPoincare();
     void loadDemoNavierStokes();
+    void loadDemo(const char* name, const char* note, const std::vector<DemoRow>& rows, const std::vector<DemoParam>& params,
+                  const std::vector<DemoPane>& panes, int layoutKind, int focus);
+    void loadDemoPvsNP();
+    void loadDemoHodge();
+    void loadDemoYangMills();
+    void loadDemoBSD();
     bool saveProject(const std::string& path);
     bool loadProject(const std::string& path);
     std::string projectDir() const;
@@ -399,6 +409,27 @@ public:
     // ---- 3D (scene3d.cpp)
     void drawScene3D(ImDrawList* dl);
     void fillSurface(int N);
+};
+
+// Building blocks for the built-in demo projects (demos.cpp).
+struct DemoRow {
+    const char* eq;
+    int color;
+    const char* label;  // display name ("" = show the formula)
+};
+struct DemoParam {
+    const char* name;
+    float value, lo, hi;
+    bool play = false;
+};
+struct DemoPane {
+    int active = 0;
+    bool threeD = false, complex = false;
+    ImVec4 fit{-8, 8, -5, 5};  // x0, x1, y0, y1
+    std::vector<int> show;     // rows visible in this pane (empty = all)
+    int colorMode = 0;
+    float zScale = 0;          // 0 = automatic
+    int res = 48;
 };
 
 struct Example {

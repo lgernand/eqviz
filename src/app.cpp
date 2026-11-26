@@ -90,6 +90,10 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
     if (o.project == "demo:riemann") loadDemoRiemann();
     else if (o.project == "demo:poincare") loadDemoPoincare();
     else if (o.project == "demo:navier-stokes") loadDemoNavierStokes();
+    else if (o.project == "demo:pvsnp") loadDemoPvsNP();
+    else if (o.project == "demo:hodge") loadDemoHodge();
+    else if (o.project == "demo:yang-mills") loadDemoYangMills();
+    else if (o.project == "demo:bsd") loadDemoBSD();
     else if (!o.project.empty() && loadProject(o.project)) {}
     else {
         setSingleFunction(o.eq.empty() ? kDefaultEq : o.eq.c_str());

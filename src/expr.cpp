@@ -87,7 +87,7 @@ static const FnEntry kFns[] = {
     {"Gamma", Fn::Gamma, false}, {"zeta", Fn::Zeta, false},
     {"isprime", Fn::IsPrime, false}, {"mobius", Fn::Mobius, false}, {"zetazero", Fn::ZetaZero, false},
     {"Ei", Fn::Ei, false}, {"li", Fn::Li, false}, {"erf", Fn::Erf, true}, {"erfc", Fn::Erfc, true},
-    {"primepi", Fn::PrimePi, false},
+    {"primepi", Fn::PrimePi, false}, {"legendre", Fn::Legendre, false}, {"mod", Fn::Mod, false},
 };
 static bool lookupFn(const std::string& w, Fn& out) {
     for (auto& f : kFns) if (w == f.name) { out = f.fn; return true; }
@@ -108,6 +108,7 @@ const char* fnDisplayName(Fn f) {
         case Fn::IsPrime: return "isprime"; case Fn::Mobius: return "mobius";
         case Fn::ZetaZero: return "zetazero"; case Fn::Ei: return "Ei"; case Fn::Li: return "li";
         case Fn::Erf: return "erf"; case Fn::Erfc: return "erfc"; case Fn::PrimePi: return "primepi";
+        case Fn::Legendre: return "legendre"; case Fn::Mod: return "mod";
     }
     return "?";
 }
@@ -410,6 +411,17 @@ private:
             if (negExp) exponent = neg(exponent);
         }
         NodeP arg;
+        if (isBinaryFn(f)) {  // name(a, b)
+            if (!accept(T::LP)) fail(std::string(fnDisplayName(f)) + " needs two arguments: " + fnDisplayName(f) + "(a, b)", pos);
+            NodeP a = additive();
+            expect(T::Comma, "',' between the two arguments");
+            NodeP b = additive();
+            expect(T::RP, "')'");
+            auto n = newNode(Op::Func);
+            n->fn = f;
+            n->kids = {a, b};
+            return n;
+        }
         if (accept(T::LP)) {
             arg = additive();
             if (peek().t == T::Comma) fail("Function takes a single argument", peek().pos);
@@ -589,7 +601,8 @@ std::string toString(const NodeP& n) {
         case Op::Div: return "(" + k(0) + "/" + k(1) + ")";
         case Op::Pow: return "(" + k(0) + "^" + k(1) + ")";
         case Op::Neg: return "-" + k(0);
-        case Op::Func: return std::string(fnDisplayName(n->fn)) + "(" + k(0) + ")";
+        case Op::Func:
+            return std::string(fnDisplayName(n->fn)) + "(" + k(0) + (n->kids.size() > 1 ? ", " + k(1) : std::string()) + ")";
         case Op::Sum: case Op::Prod:
             return std::string(n->op == Op::Sum ? "sum(" : "prod(") + n->name + ", " + k(0) + ", " + k(1) + ", " + k(2) + ")";
         case Op::Fact: return k(0) + "!";
@@ -779,6 +792,7 @@ static NodeP D(const NodeP& n, const std::string& v) {
                                        bin(Op::Div, bin(Op::Mul, b, D(a, v)), a)));
         }
         case Op::Func: {
+            if (isBinaryFn(n->fn)) return num(0);  // integer-valued step functions
             NodeP fp = fnPrime(n->fn, k[0]);
             if (!fp) return numericD(n, v);
             return bin(Op::Mul, fp, D(k[0], v));
@@ -1178,6 +1192,7 @@ cplx cfunc(Fn f, cplx a) {
             return a / std::abs(a);
         case Fn::Gamma: return gammaC(a);
         case Fn::Zeta: return zetaC(a);
+        case Fn::Legendre: case Fn::Mod: return NaNc;  // two-argument; handled in Program::ev
         case Fn::IsPrime: return isPrimeInt(std::round(x * 1e9) / 1e9) ? 1.0 : 0.0;
         case Fn::Mobius: return mobiusInt(std::round(x * 1e9) / 1e9);
         case Fn::ZetaZero: {
@@ -1294,7 +1309,19 @@ cplx Program::ev(int i, Ctx& c) const {
         case Op::Div: return cdiv(ev(in.a, c), ev(in.b, c));
         case Op::Pow: return cpow(ev(in.a, c), ev(in.b, c), c.real);
         case Op::Neg: return -ev(in.a, c);
-        case Op::Func: return cfunc(in.fn, ev(in.a, c));
+        case Op::Func:
+            if (in.b >= 0) {  // two-argument built-ins
+                double a = std::round(ev(in.a, c).real()), m = std::round(ev(in.b, c).real());
+                if (!std::isfinite(a) || !std::isfinite(m) || m == 0 || std::fabs(a) > 9e15 || std::fabs(m) > 4e9) return NaNc;
+                long long ai = (long long)a, mi = (long long)std::fabs(m);
+                long long r = ((ai % mi) + mi) % mi;
+                if (in.fn == Fn::Mod) return (double)r;
+                // Legendre symbol (a / p): 0, 1 or -1 (p = 2: parity)
+                if (mi == 2) return (double)(r & 1);
+                if (r == 0) return 0.0;
+                return powmod((uint64_t)r, (uint64_t)(mi - 1) / 2, (uint64_t)mi) == 1 ? 1.0 : -1.0;
+            }
+            return cfunc(in.fn, ev(in.a, c));
         case Op::Fact: {
             cplx a = ev(in.a, c);
             if (a.imag() == 0 && a.real() >= 0 && a.real() == std::floor(a.real()) && a.real() <= 170) {
