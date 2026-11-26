@@ -371,6 +371,32 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
             if (dc < best) { best = dc; bestC = c; bestP = pc; }
             if (hoverPane_ == cur_ && cands[c].key == hoverKey_) { stickC = c; stickP = pc; }
         }
+        // the axes are snap targets too (keys 3000001 = x-axis, 3000002 = y-axis)
+        const ImVec2 o = view_.w2s(0, 0);
+        const float dxAxis = (m.y - o.y) * (m.y - o.y), dyAxis = (m.x - o.x) * (m.x - o.x);
+        const bool mine = hoverPane_ == cur_;
+        int axis = 0;  // 1 x-axis, 2 y-axis
+        if (mine && hoverKey_ == 3000001 && dxAxis < reach) axis = 1;          // stay on the axis we were on
+        else if (mine && hoverKey_ == 3000002 && dyAxis < reach) axis = 2;
+        else if (stickC < 0) {                                                 // otherwise the nearest target
+            float bestAxis = std::min(dxAxis, dyAxis);
+            if (bestAxis < reach && bestAxis < best) axis = dxAxis <= dyAxis ? 1 : 2;
+        }
+        if (axis) {
+            hoverKey_ = 3000000 + axis;
+            hoverPane_ = cur_;
+            double wx, wy;
+            view_.s2w(m, wx, wy);
+            ImVec2 P = axis == 1 ? ImVec2(m.x, o.y) : ImVec2(o.x, m.y);
+            if (axis == 1) wy = 0; else wx = 0;
+            dl->AddCircleFilled(P, 5.f, col(WHITE));
+            dl->AddCircle(P, 5.f, col(BG), 0, 2.f);
+            const float s = 19.f;
+            ts::Box coords = ts::parens(ts::hcat({ts::text(ts::fmtNum(wx, 5), s), ts::text(",", s), ts::space(6),
+                                                   ts::text(ts::fmtNum(wy, 5), s)}), s);
+            hoverLabel(dl, P, coords, col(WHITE));
+            return;
+        }
         if (stickC >= 0) { bestC = stickC; bestP = stickP; }
         if (bestC < 0) { if (hoverPane_ == cur_) hoverKey_ = kNoHover; return; }
         hoverKey_ = cands[bestC].key;
@@ -585,6 +611,7 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
     EvalEnv env = makeEnv();
     const Func& cur = displayFunc();
     const float s = 19.f;
+    int axisSnap = 0;  // set when the cursor snaps to the plane's real (1) or imaginary (2) axis
 
     // Snap to the nearest transformed grid line (like curves on real axes): find the closest
     // point on any warped polyline, interpolating both the warped point and its input z.
@@ -619,7 +646,24 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
                 }
             }
         }
-        if (bestLine < 0 && hoverPane_ == cur_) hoverKey_ = kNoHover;
+        // the plane's own axes: stay on one we were on, or take it when it's nearer than any line
+        const ImVec2 o = view_.w2s(0, 0);
+        const float dRe = (m.y - o.y) * (m.y - o.y), dIm = (m.x - o.x) * (m.x - o.x);
+        const bool mine = hoverPane_ == cur_;
+        int axis = 0;
+        if (mine && hoverKey_ == 3000003 && dRe < reach) axis = 1;
+        else if (mine && hoverKey_ == 3000004 && dIm < reach) axis = 2;
+        else if (!stuck) {
+            float a = std::min(dRe, dIm);
+            if (a < reach && a < best) axis = dRe <= dIm ? 1 : 2;
+        }
+        if (axis) {
+            bestLine = -1;
+            hoverKey_ = 3000002 + axis;
+            hoverPane_ = cur_;
+            axisSnap = axis;
+        }
+        if (bestLine < 0 && !axis && hoverPane_ == cur_) hoverKey_ = kNoHover;
         if (bestLine >= 0) {
             hoverKey_ = 2000000 + bestLine;
             hoverPane_ = cur_;
@@ -652,9 +696,15 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
         }
     }
 
-    // not near a line: the point under the cursor and where f sends it
+    // not near a line: the point under the cursor (or on the axis it snapped to) and where f sends it
+    if (axisSnap) {
+        const ImVec2 o = view_.w2s(0, 0);
+        m = axisSnap == 1 ? ImVec2(m.x, o.y) : ImVec2(o.x, m.y);
+    }
     double zx, zy;
     view_.s2w(m, zx, zy);
+    if (axisSnap == 1) zy = 0;
+    if (axisSnap == 2) zx = 0;
     const cplx z(zx, zy);
     cplx fz = evalF(cur, z, 0, env);
     if (!finiteC(fz)) return;
