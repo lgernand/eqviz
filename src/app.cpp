@@ -240,7 +240,7 @@ void App::frame(float dt) {
         else drawScene2D(dl);
         drawOverlay(dl);
         dl->PopClipRect();
-        if (threeD_ && !dimAnimating_) drawRotateControl(i);
+        if (!dimAnimating_) drawRotateControl(i);
     }
     drawLayoutChrome(dl);
     dl->PopClipRect();
@@ -435,6 +435,18 @@ static CamState lerpCam(const CamState& a, const CamState& b, double t) {
 }
 
 void App::updatePaneAnimations(float dt) {
+    if (autoPan_ && !dimAnimating_) {  // continuous drift, in graph units per second
+        if (threeD_) {
+            const double dx = panVx_ * dt, dy = panVy_ * dt;
+            cam_.s.target = cam_.s.target + Vec3(dx, dy, panVz_ * dt);
+            domainCx_ += dx;  // the plotted region travels with the camera
+            domainCy_ += dy;
+        } else {
+            view_.cx += panVx_ * dt;
+            view_.cy += panVy_ * dt;
+            if (zooming_) view_.s2w(zoomAnchorS_, zoomAnchorX_, zoomAnchorY_);
+        }
+    }
     if (create_ < 1) create_ = std::min(1.f, create_ + dt / 1.5f);
     if (morph_ < 1) morph_ = std::min(1.f, morph_ + dt / 1.3f);
     if (derivCreate_ < 1) derivCreate_ = std::min(1.f, derivCreate_ + dt / 1.3f);
@@ -605,6 +617,7 @@ void App::runScriptedActions() {
         else if (a == "aD") addPane(kBelow);
         else if (a == "x") closePane(focus_);
         else if (a == "hide") togglePanel();
+        else if (a == "pan") autoPan_ = !autoPan_;
         else if (a.rfind("res", 0) == 0) surfRes_ = std::atoi(a.c_str() + 3);
         else if (a.rfind("theme", 0) == 0) selectTheme(std::atoi(a.c_str() + 5));
         else if (a.rfind("pscroll", 0) == 0) panelScrollReq_ = (float)std::atof(a.c_str() + 7);
@@ -675,38 +688,67 @@ void App::drawRotateControl(int pane) {
     ImDrawList* wdl = ImGui::GetWindowDrawList();
     const ImU32 dim = theme::col(theme::WHITE, 0.55f), bright = theme::col(theme::WHITE, 0.92f), on = theme::col(theme::BLUE_C);
 
-    // "rotate" toggle
-    const char* label = "rotate";
-    ImVec2 ts = ImGui::CalcTextSize(label);
-    ImVec2 p0 = ImGui::GetCursorScreenPos();
-    if (ImGui::InvisibleButton("##toggle", ImVec2(ts.x, ts.y + 6))) { autoRotate_ = !autoRotate_; focus_ = pane; }
-    const bool hov = ImGui::IsItemHovered();
-    wdl->AddText(ImVec2(p0.x, p0.y + 3), autoRotate_ ? on : (hov ? bright : dim), label);
-    if (autoRotate_) wdl->AddLine(ImVec2(p0.x, p0.y + ts.y + 5), ImVec2(p0.x + ts.x, p0.y + ts.y + 5), theme::col(theme::BLUE_C, 0.7f), 1.5f);
-    ImGui::SetItemTooltip(autoRotate_ ? "Stop rotating around the z-axis" : "Rotate continuously around the z-axis");
+    auto textToggle = [&](const char* id, const char* label, bool& state, const char* tipOn, const char* tipOff) {
+        ImVec2 ts = ImGui::CalcTextSize(label);
+        ImVec2 p0 = ImGui::GetCursorScreenPos();
+        if (ImGui::InvisibleButton(id, ImVec2(ts.x, ts.y + 6))) { state = !state; focus_ = pane; }
+        const bool hov = ImGui::IsItemHovered();
+        wdl->AddText(ImVec2(p0.x, p0.y + 3), state ? on : (hov ? bright : dim), label);
+        if (state) wdl->AddLine(ImVec2(p0.x, p0.y + ts.y + 5), ImVec2(p0.x + ts.x, p0.y + ts.y + 5), theme::col(theme::BLUE_C, 0.7f), 1.5f);
+        ImGui::SetItemTooltip("%s", state ? tipOn : tipOff);
+    };
+    auto divider = [&] {
+        ImGui::SameLine(0, 10);
+        ImVec2 d0 = ImGui::GetCursorScreenPos();
+        const float th = ImGui::GetFontSize();
+        wdl->AddLine(ImVec2(d0.x, d0.y + 3), ImVec2(d0.x, d0.y + th + 4), theme::col(theme::WHITE, 0.3f), 1.f);
+        ImGui::Dummy(ImVec2(1, th + 6));
+        ImGui::SameLine(0, 10);
+    };
+    // borderless drag value; double-click resets
+    auto value = [&](const char* id, float* v, float speed, float lo, float hi, const char* fmt, const char* sample,
+                     float reset, bool active, const char* tip) {
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, theme::surface(1.f, 0.06f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, theme::surface(1.f, 0.10f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(active ? bright : dim));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize(sample).x + 6);
+        if (ImGui::DragFloat(id, v, speed, lo, hi, fmt)) focus_ = pane;
+        if (ImGui::IsItemActive()) rotateDragPane_ = pane;
+        if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) *v = reset;
+        ImGui::SetItemTooltip("%s", tip);
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+    };
 
-    // divider
-    ImGui::SameLine(0, 10);
-    ImVec2 d0 = ImGui::GetCursorScreenPos();
-    wdl->AddLine(ImVec2(d0.x, d0.y + 3), ImVec2(d0.x, d0.y + ts.y + 4), theme::col(theme::WHITE, 0.3f), 1.f);
-    ImGui::Dummy(ImVec2(1, ts.y + 6));
-
-    // speed, as a borderless drag value
-    ImGui::SameLine(0, 10);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1, 1, 1, 0.06f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1, 1, 1, 0.10f));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(autoRotate_ ? bright : dim));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("-90.0\xC2\xB0/s").x + 6);
-    if (ImGui::DragFloat("##spd", &rotateSpeed_, 0.15f, -90.f, 90.f, "%.1f\xC2\xB0/s")) focus_ = pane;
-    if (ImGui::IsItemActive()) rotateDragPane_ = pane;
-    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) rotateSpeed_ = 10.f;
-    ImGui::SetItemTooltip("Speed around the z-axis: drag sideways to adjust (negative reverses),\n"
-                          "Cmd-click to type a value, double-click to reset to 10\xC2\xB0/s.");
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(4);
+    if (threeD_) {
+        textToggle("##rot", "rotate", autoRotate_, "Stop rotating around the z-axis", "Rotate continuously around the z-axis");
+        divider();
+        value("##spd", &rotateSpeed_, 0.15f, -90.f, 90.f, "%.1f\xC2\xB0/s", "-90.0\xC2\xB0/s", 10.f, autoRotate_,
+              "Rotation speed around the z-axis: drag sideways (negative reverses),\n"
+              "Cmd-click to type a value, double-click to reset to 10\xC2\xB0/s.");
+        ImGui::SameLine(0, 22);
+    }
+    textToggle("##pan", "pan", autoPan_, "Stop panning", "Pan continuously at the x / y / z speeds");
+    divider();
+    const char* axes[] = {"x", "y", "z"};
+    float* vel[] = {&panVx_, &panVy_, &panVz_};
+    const int nAxes = threeD_ ? 3 : 2;
+    for (int a = 0; a < nAxes; ++a) {
+        if (a) ImGui::SameLine(0, 8);
+        ImVec2 lp = ImGui::GetCursorScreenPos();
+        wdl->AddText(fonts_.math ? ImGui::GetFont() : ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(lp.x, lp.y + 3),
+                     theme::col(theme::WHITE, 0.4f), axes[a]);
+        ImGui::Dummy(ImVec2(ImGui::CalcTextSize(axes[a]).x + 3, ImGui::GetFontSize() + 6));
+        ImGui::SameLine(0, 2);
+        char vid[8];
+        snprintf(vid, sizeof vid, "##v%d", a);
+        value(vid, vel[a], 0.01f, -1000.f, 1000.f, "%.2f", "-10.00", 0.f, autoPan_,
+              "Pan speed along this axis, in graph units per second: drag sideways,\n"
+              "Cmd-click to type a value, double-click to reset to 0.");
+    }
     ImGui::PopFont();
     ImGui::End();
     ImGui::PopStyleVar(2);

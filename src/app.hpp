@@ -240,7 +240,8 @@ using CplxVec = std::vector<cplx>;
     X(bool, draggingProbe_, false) X(ImVec2, zoomAnchorS_, {}) X(double, zoomAnchorX_, 0)               \
     X(double, zoomAnchorY_, 0) X(double, planeX0_, -8) X(double, planeX1_, 8) X(double, planeY0_, -5)   \
     X(double, planeY1_, 5) X(Camera, cam_, {}) X(double, targetDist_, 14) X(bool, orbiting_, false)     \
-    X(bool, autoRotate_, false) X(float, rotateSpeed_, 10.f) X(float, domainR_, 4.f) X(float, zScale_, 1.f) X(float, surfOpacity_, 0.88f) \
+    X(bool, autoRotate_, false) X(float, rotateSpeed_, 10.f) X(bool, autoPan_, false)                    \
+    X(float, panVx_, 0.5f) X(float, panVy_, 0.f) X(float, panVz_, 0.f) X(float, domainR_, 4.f) X(float, zScale_, 1.f) X(float, surfOpacity_, 0.88f) \
     X(double, domainCx_, 0) X(double, domainCy_, 0) X(int, surfRes_, 48) X(int, colorMode_, 0)          \
     X(float, probeX_, 1.f) X(float, probeY_, 0.5f) X(ImVec2, probeScreen_, {}) X(bool, probeVisible_, false) \
     X(bool, domainColor_, false) X(float, dcOpacity_, 0.75f) X(unsigned int, dcTex_, 0u) X(int, dcW_, 0) \

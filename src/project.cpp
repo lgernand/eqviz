@@ -387,7 +387,8 @@ bool App::saveProject(const std::string& path) {
             if (!rowVisible(funcs_[r])) hidden += (hidden.empty() ? "" : ",") + std::to_string(r);
         out << "pane\t" << (complex_ ? 1 : 0) << "\t" << (threeD_ ? 1 : 0) << "\t" << active_ << "\t" << view_.cx << "\t"
             << view_.cy << "\t" << view_.scale << "\t" << view_.aspect << "\t" << (hidden.empty() ? "-" : hidden) << "\t"
-            << (autoRotate_ ? 1 : 0) << "\t" << rotateSpeed_ << "\n";
+            << (autoRotate_ ? 1 : 0) << "\t" << rotateSpeed_ << "\t" << (autoPan_ ? 1 : 0) << "\t" << panVx_ << "\t"
+            << panVy_ << "\t" << panVz_ << "\n";
     }
     enterPane(start);
     enterPane(focus_);
@@ -411,7 +412,7 @@ bool App::loadProject(const std::string& path) {
     std::vector<Param> ps;
     std::vector<int> fnVisible;
     std::vector<std::pair<int, std::string>> labels;
-    struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; bool rotate = false; float rotSpeed = 10; };
+    struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; bool rotate = false; float rotSpeed = 10; bool pan = false; float pv[3] = {0.5f, 0, 0}; };
     std::vector<PaneSpec> paneSpecs;
     int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
     std::vector<LayoutNode> tree;
@@ -461,6 +462,7 @@ bool App::loadProject(const std::string& path) {
                 p.complex = f[1] == "1"; p.threeD = f[2] == "1"; p.active = std::stoi(f[3]);
                 p.cx = std::stod(f[4]); p.cy = std::stod(f[5]); p.s = std::stod(f[6]); p.a = std::stod(f[7]);
                 if (f.size() > 10) { p.rotate = f[9] == "1"; p.rotSpeed = std::stof(f[10]); }
+                if (f.size() > 14) { p.pan = f[11] == "1"; for (int k = 0; k < 3; ++k) p.pv[k] = std::stof(f[12 + k]); }
                 if (f[8] != "-") {
                     std::stringstream hs(f[8]);
                     std::string item;
@@ -516,6 +518,8 @@ bool App::loadProject(const std::string& path) {
         want3D_ = p.threeD && !threeD_;
         autoRotate_ = p.rotate;
         rotateSpeed_ = p.rotSpeed;
+        autoPan_ = p.pan;
+        panVx_ = p.pv[0]; panVy_ = p.pv[1]; panVz_ = p.pv[2];
         if (complex_ && !p.threeD) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
     }
     extendWorkspace_ = wsExtend;

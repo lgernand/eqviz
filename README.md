@@ -130,6 +130,7 @@ ad-hoc signed, so a copy sent to another Mac needs right-click, then Open, the f
 | Two-finger scroll (trackpad) | pan, or scroll the workspace when it extends past the window | pan, or scroll the workspace |
 | Pinch (trackpad) | zoom about the cursor | zoom |
 | Mouse wheel | zoom about the cursor | zoom |
+| "pan │ x y" (bottom-left, on hover) | click "pan" to drift continuously; drag the x / y speeds (units/s) | same, plus z; the plotted region travels with the camera |
 | "rotate │ speed" (3D panes, bottom-left, on hover) | | click "rotate" to spin around the z-axis; drag the speed sideways (°/s, negative reverses) |
 | Scrollbars | click the track to page, drag the thumb to scroll | |
 
