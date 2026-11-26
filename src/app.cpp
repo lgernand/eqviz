@@ -172,6 +172,7 @@ void App::frame(float dt) {
         float target = panelCollapsed_ ? 1.f : 0.f;
         panelSlide_ += std::clamp(target - panelSlide_, -dt / 0.22f, dt / 0.22f);
         panelW_ = panelFullW_ * (1.f - theme::smooth(panelSlide_));
+        if (exporting_) panelW_ = 0;  // clean frames: no panel while recording
     }
     computePaneRects();
     if (pendingNotePane_ >= 0 && pendingNotePane_ < (int)panes_.size()) {  // finish a demo's note layout
@@ -202,6 +203,7 @@ void App::frame(float dt) {
         }
     }
     handleKeys();
+    updateTimeline(dt);
     if (opt_.bench && frameNo_ > 30) {  // benchmark: keep every pane's view moving
         for (int i = 0; i < (int)panes_.size(); ++i) {
             enterPane(i);
@@ -213,7 +215,7 @@ void App::frame(float dt) {
 
     // shared animations: parameter sweeps and the sum player
     for (auto& p : params_) {
-        if (!p.playing) continue;
+        if (!p.playing || tlPlaying_ || exporting_) continue;
         p.phase += dt / 6.0;
         double u = 0.5 - 0.5 * std::cos(2 * PI * p.phase);
         p.value = (float)(p.min + (p.max - p.min) * u);
@@ -256,12 +258,13 @@ void App::frame(float dt) {
         else drawScene2D(dl);
         drawOverlay(dl);
         dl->PopClipRect();
-        if (!dimAnimating_ && !isNote_) drawRotateControl(i);
+        if (!dimAnimating_ && !isNote_ && !exporting_) drawRotateControl(i);
     }
     drawLayoutChrome(dl);
     dl->PopClipRect();
     enterPane(focus_);
-    drawPanel();
+    if (!exporting_) drawPanel();
+    drawTimeline();
 }
 
 // ------------------------------------------------------------------ equation
@@ -624,7 +627,13 @@ void App::runScriptedActions() {
         size_t colon = item.find(':');
         if (colon == std::string::npos || std::atoi(item.c_str()) != frameNo_) continue;
         std::string a = item.substr(colon + 1);
-        if (a == "c") toggleComplex();
+        if (a == "K") addKeyframe();
+        else if (a == "play") { tlPlaying_ = true; tlT_ = keys_.empty() ? 0 : keys_.front().t; tlScrub_ = true; }
+        else if (a == "exporthalf") exportHalf_ = true;
+        else if (a.rfind("export", 0) == 0) { if (a.size() > 6) exportFps_ = std::atoi(a.c_str() + 6); startExport(); }
+        else if (a.rfind("ease", 0) == 0) { if (!keys_.empty()) keys_.back().ease = std::atoi(a.c_str() + 4); }
+        else if (a.size() > 1 && a[0] == 'T') { tlShown_ = true; tlT_ = std::atof(a.c_str() + 1); tlScrub_ = true; }
+        else if (a == "c") toggleComplex();
         else if (a == "3") toggle3D();
         else if (a == "d") toggleDeriv();
         else if (a == "p") { sumPos_ = 0; sumShowAll_ = false; sumPlaying_ = true; }
@@ -876,7 +885,20 @@ void App::handleInput(float dt) {
 void App::handleKeys() {  // keyboard shortcuts act on the focused pane (only when not typing)
     if (!ImGui::GetIO().WantTextInput) {
         if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) togglePanel();
-        if (ImGui::IsKeyPressed(ImGuiKey_Space) && hasSum_) {
+        if (exporting_) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) finishExport(true);
+            return;
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_T)) tlShown_ = !tlShown_;
+        if (ImGui::IsKeyPressed(ImGuiKey_K)) addKeyframe();
+        const bool timelineSpace = tlShown_ && keys_.size() >= 2;
+        if (ImGui::IsKeyPressed(ImGuiKey_Space) && timelineSpace) {
+            tlPlaying_ = !tlPlaying_;
+            if (tlPlaying_) {
+                if (tlT_ >= tlLength() - 1e-3 || tlT_ < keys_.front().t) tlT_ = keys_.front().t;
+                tlScrub_ = true;
+            }
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Space) && hasSum_) {
             if (sumPlaying_) sumPlaying_ = false;
             else {
                 if (sumPos_ >= sumCount_) sumPos_ = 0;

@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -284,10 +285,13 @@ int main(int argc, char** argv) {
         glfwPollEvents();
         double now = glfwGetTime();
         float dt = opt.frames > 0 ? 1.f / 60.f : (float)std::min(0.1, now - last);
+        const bool exporting = app.exporting_;
+        if (exporting) dt = app.exportDt();  // video time, independent of how long frames take
         last = now;
 
         auto t0 = std::chrono::steady_clock::now();
         app.plat_ = platformPoll();
+        if (exporting) app.plat_ = PlatformInput{};  // no trackpad gestures in the recording
         app.applyPendingFonts();  // font changes take effect between frames
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -305,6 +309,7 @@ int main(int argc, char** argv) {
                 io.AddMouseButtonEvent(0, k >= 1 && k < 24);
             }
         }
+        if (exporting) io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);  // no hover readouts in the recording
         ImGui::NewFrame();
         app.frame(dt);
         ImGui::Render();
@@ -328,7 +333,21 @@ int main(int argc, char** argv) {
             (void)renderStart;
         }
 
-        if (opt.frames > 0 && ++frame >= opt.frames) {
+        if (app.videoCapturing()) {
+            static std::vector<unsigned char> px;
+            px.resize((size_t)fw * fh * 4);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0, 0, fw, fh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+            app.exportFrame(px.data(), fw, fh);
+        }
+        {
+            static std::string title;
+            if (!app.windowTitle_.empty() && app.windowTitle_ != title) {
+                title = app.windowTitle_;
+                glfwSetWindowTitle(window, title.c_str());
+            }
+        }
+        if (opt.frames > 0 && !exporting && !app.exporting_ && ++frame >= opt.frames) {
             if (!opt.shot.empty()) {
                 std::vector<unsigned char> px((size_t)fw * fh * 4);
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);

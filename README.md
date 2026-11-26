@@ -87,6 +87,30 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`, and two-argument `mod(a, m)` and `legendre(a, p)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 
+## Timeline & video export
+
+Press `T` (or **Timeline & video export** in the View section) for a strip under the panes.
+
+- **+ Keyframe** (`K`) records the whole workspace at the playhead. That covers every pane's
+  2D view, 3D camera, surface region and height scale, real/complex, 2D/3D, derivative, domain
+  colouring, active and hidden rows, note scrolling, the variables, the sum player and the
+  workspace scroll. Adding a keyframe at the end moves the playhead 2 s on, ready for the next shot.
+- Between keyframes, views, cameras, variables and the term count are interpolated. Zoom and
+  camera distance interpolate on a log scale, so zooms feel even. Each segment eases
+  **Smooth** (manim's `smooth`), **Linear**, or **Hold** (jump at the next key).
+- Mode switches (complex, 3D, derivative, active row) run their usual animations when the
+  playhead passes the keyframe that changes them. Scrubbing applies them instantly.
+- Drag a diamond to retime a keyframe, or drag the track to scrub. **Update keyframe** and
+  **Delete** act on the keyframe under the playhead. **length** stretches the whole timeline.
+  `Space` plays, and **Loop** repeats.
+- **Export video…** renders the timeline frame by frame at 24, 30 or 60 fps, at full or half
+  the window's pixel size. The output is an H.264 MP4 in `~/Movies/eqviz/` (AVFoundation,
+  no ffmpeg needed). The panel, the strip, hover readouts and the focus border are hidden
+  while recording, and frames use video time, so the output is smooth even when rendering is
+  slow. Recording continues briefly past the last keyframe while a transition it started
+  finishes. `Esc` cancels.
+- Timelines are saved in project files.
+
 ## Appearance
 
 The **Appearance** section at the bottom of the panel sets:
@@ -149,7 +173,8 @@ The control panel can be collapsed with the « button (or `Tab`) to give the pan
 window; the floating ☰ button brings it back.
 
 Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum · `D` derivative · `C` real/complex ·
-`3` 2D/3D · `R` reset view.
+`3` 2D/3D · `R` reset view · `T` timeline · `K` add/update keyframe (`Space` plays the timeline when it is open
+and has two or more keyframes).
 
 ## Command line
 
@@ -173,6 +198,7 @@ Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum 
 | `src/panel.cpp` | control panel and on-canvas equation labels |
 | `src/themes.cpp`, `src/fonts.cpp`, `src/appearance.cpp` | colour themes, font choices, Appearance section and settings |
 | `src/notes.cpp`, `src/demo_notes.cpp` | note panes (markup, layout, editor) and the demos' explanations |
+| `src/timeline.cpp`, `src/video*` | keyframes, playback, timeline strip; MP4 writer (AVFoundation) |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |
 | `src/app.*` | state, animations, input, mode transitions |

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <ostream>
 #include <set>
 #include <string>
 #include <thread>
@@ -277,6 +278,28 @@ struct PaneState {
     EQVIZ_PANE_FIELDS(EQVIZ_DECLARE_FIELD)
 };
 
+// ------------------------------------------------------------------ timeline (timeline.cpp)
+
+// One pane's state at a keyframe.
+struct KeyPane {
+    double cx = 0, cy = 0, scale = 72, aspect = 1;  // 2D view
+    CamState cam;                                   // 3D camera
+    float zScale = 1, domainR = 4;
+    double domainCx = 0, domainCy = 0;
+    bool complex = false, threeD = false, deriv = false, domainColor = false;
+    int active = 0;
+    std::set<int> hidden;  // row ids (row indices in project files)
+    float noteScroll = 0;
+};
+struct Keyframe {
+    double t = 0;
+    int ease = 0;  // easing of the segment that starts here: 0 smooth, 1 linear, 2 hold
+    std::vector<std::pair<std::string, float>> params;
+    double sumPos = -1;
+    float scrollX = 0, scrollY = 0;
+    std::vector<KeyPane> panes;
+};
+
 // ------------------------------------------------------------------ app
 
 struct DemoRow;
@@ -447,6 +470,34 @@ public:
     void autoZScale();
     void resetView();
     void loadExample(int i);
+
+    // ---- timeline & video export (timeline.cpp)
+    std::vector<Keyframe> keys_;
+    double tlT_ = 0;              // playhead (seconds)
+    bool tlPlaying_ = false, tlShown_ = false, tlLoop_ = false;
+    bool tlScrub_ = false;        // apply the playhead instantly this frame (scrub / jump)
+    int tlDragKey_ = -1;
+    float tlHeight_ = 96.f;
+    bool exporting_ = false;
+    int exportFps_ = 30, exportWarm_ = 0, exportFrames_ = 0, exportTotal_ = 0;
+    bool exportHalf_ = false;
+    double exportEnd_ = 0;
+    void* video_ = nullptr;
+    std::string exportStatus_, exportPath_, windowTitle_;
+    bool exportOk_ = false;
+    Keyframe captureKeyframe(double t);
+    void addKeyframe();
+    void applyTimeline(double t, bool animate);
+    void updateTimeline(float dt);  // advances / applies the playhead; called from frame()
+    void drawTimeline();
+    void startExport();
+    void finishExport(bool cancelled);
+    bool videoCapturing() const { return exporting_ && exportWarm_ <= 0; }
+    void exportFrame(const unsigned char* rgba, int w, int h);  // called by main after rendering
+    float exportDt() const { return 1.f / (float)exportFps_; }
+    double tlLength() const { return keys_.empty() ? 0 : keys_.back().t; }
+    void saveTimeline(std::ostream& out) const;
+    void loadTimelineLine(const std::vector<std::string>& f, const std::vector<int>& rowIds);
 
     // ---- UI (panel.cpp)
     void setupStyle();

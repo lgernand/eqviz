@@ -111,6 +111,9 @@ void App::rebuildProject(bool sameRow) {
 
 void App::resetForProject() {
     projNote_.clear();
+    keys_.clear();
+    tlT_ = 0;
+    tlPlaying_ = false;
     const int start = cur_;
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
@@ -419,6 +422,7 @@ bool App::saveProject(const std::string& path) {
         if (d.label[0]) out << "label\t" << i << "\t" << d.label << "\n";
         (void)firstVisible;
     }
+    saveTimeline(out);
     return (bool)out;
 }
 
@@ -430,6 +434,7 @@ bool App::loadProject(const std::string& path) {
     std::vector<Param> ps;
     std::vector<int> fnVisible;
     std::vector<std::pair<int, std::string>> labels, notePanes;
+    std::vector<std::vector<std::string>> timelineLines;
     struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; bool rotate = false; float rotSpeed = 10; bool pan = false; float pv[3] = {0.5f, 0, 0}; };
     std::vector<PaneSpec> paneSpecs;
     int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
@@ -452,7 +457,8 @@ bool App::loadProject(const std::string& path) {
         auto f = split(line);
         if (f.empty()) continue;
         try {
-            if (f[0] == "name" && f.size() > 1) name = f[1];
+            if (f[0] == "timeline" || f[0] == "key" || f[0] == "kpane") timelineLines.push_back(f);
+            else if (f[0] == "name" && f.size() > 1) name = f[1];
             else if (f[0] == "note" && f.size() > 1) note = f[1];
             else if (f[0] == "mode" && f.size() > 2) { wantComplex = f[1] == "1"; want3D = f[2] == "1"; }
             else if (f[0] == "view" && f.size() > 4) { vcx = std::stod(f[1]); vcy = std::stod(f[2]); vs = std::stod(f[3]); va = std::stod(f[4]); }
@@ -528,6 +534,12 @@ bool App::loadProject(const std::string& path) {
     resetForProject();
     funcs_ = std::move(fs);
     params_ = ps;
+    {
+        std::vector<int> ids;
+        for (auto& d : funcs_) ids.push_back(d.id);
+        for (auto& f : timelineLines) loadTimelineLine(f, ids);
+        if (!keys_.empty()) tlShown_ = true;
+    }
     std::strncpy(projName_, name.c_str(), sizeof projName_ - 1);
     projNote_ = note;
     for (int i = 0; i < (int)panes_.size(); ++i) {

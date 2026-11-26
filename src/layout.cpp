@@ -37,7 +37,7 @@ void App::layoutRects(int n, ImVec4 r) {
 
 void App::computePaneRects() {
     ImVec2 ds = ImGui::GetIO().DisplaySize;
-    visRect_ = ImVec4(panelW_, 0, ds.x, ds.y);
+    visRect_ = ImVec4(panelW_, 0, ds.x, ds.y - (tlShown_ && !exporting_ ? tlHeight_ : 0.f));
     const float vw = visRect_.z - visRect_.x, vh = visRect_.w - visRect_.y;
     float ww = vw, wh = vh;
     if (extendWorkspace_) {
@@ -356,9 +356,9 @@ void App::drawLayoutChrome(ImDrawList* dl) {
             dl->AddLine(a, b, hot ? col(BLUE_C, 0.9f) : col(WHITE, 0.10f), hot ? 3.f : 1.f);
         }
         const ImVec4& r = paneRects_[focus_];
-        dl->AddRect(ImVec2(r.x + 1, r.y + 1), ImVec2(r.z - 1, r.w - 1), col(BLUE_C, 0.55f), 0, 2.f);
+        if (!exporting_) dl->AddRect(ImVec2(r.x + 1, r.y + 1), ImVec2(r.z - 1, r.w - 1), col(BLUE_C, 0.55f), 0, 2.f);
     }
-    if (!extendWorkspace_) return;
+    if (!extendWorkspace_ || exporting_) return;
     const float vw = visRect_.z - visRect_.x, vh = visRect_.w - visRect_.y;
     const float ww = vw * std::max(1.f, wsW_), wh = vh * std::max(1.f, wsH_);
     if (ww > vw + 1) {

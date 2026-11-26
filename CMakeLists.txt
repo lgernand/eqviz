@@ -60,14 +60,16 @@ add_executable(eqviz
   src/appearance.cpp
   src/notes.cpp
   src/demo_notes.cpp
+  src/timeline.cpp
   src/expr.cpp
   src/typeset.cpp)
 if(APPLE)
   enable_language(OBJCXX)
-  target_sources(eqviz PRIVATE src/platform_mac.mm)
-  target_link_libraries(eqviz PRIVATE "-framework Cocoa")
+  target_sources(eqviz PRIVATE src/platform_mac.mm src/video_mac.mm)
+  set_source_files_properties(src/video_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+  target_link_libraries(eqviz PRIVATE "-framework Cocoa" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo")
 else()
-  target_sources(eqviz PRIVATE src/platform_stub.cpp)
+  target_sources(eqviz PRIVATE src/platform_stub.cpp src/video_stub.cpp)
 endif()
 target_link_libraries(eqviz PRIVATE imgui Threads::Threads)
 if(APPLE)

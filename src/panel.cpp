@@ -259,6 +259,15 @@ void App::drawPanel() {
         ImGui::PopFont();
         ImGui::PopStyleColor();
     }
+    {   // timeline strip at the bottom of the canvas
+        if (tlShown_) pushAccent(BLUE_C);
+        char lbl[64];
+        snprintf(lbl, sizeof lbl, "Timeline & video export%s", keys_.empty() ? "" : keys_.size() == 1 ? "  \xC2\xB7  1 key" : "");
+        if (keys_.size() > 1) snprintf(lbl, sizeof lbl, "Timeline & video export  \xC2\xB7  %d keys", (int)keys_.size());
+        if (ImGui::Button(lbl, ImVec2(-1, 30))) tlShown_ = !tlShown_;
+        if (tlShown_) ImGui::PopStyleColor(3);
+        ImGui::SetItemTooltip("Keyframe views, modes and variables, play them back, and export an MP4 (T)");
+    }
     if (isNote_) {
         sectionHeader("NOTE", fonts_.uiBold);
         drawNoteEditor();
