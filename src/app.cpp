@@ -667,12 +667,12 @@ void App::runScriptedActions() {
 }
 
 float App::snapRadius() const {
-    // 14 px at the pane's starting zoom, growing as you zoom in (curves spread apart) and
+    // 8 px at the pane's starting zoom, growing as you zoom in (curves spread apart) and
     // shrinking as you zoom out (curves bunch together)
     double z = 1;
     if (threeD_) z = homeDist_ > 0 ? homeDist_ / std::max(1e-9, cam_.s.dist) : 1;
     else z = view_.scale / std::max(1e-12, homeScale_);
-    return (float)std::clamp(14.0 * z, 6.0, 40.0);
+    return (float)std::clamp(8.0 * z, 4.0, 24.0);
 }
 
 bool App::canHover() const {
