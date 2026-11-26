@@ -328,7 +328,11 @@ public:
 
     // layout
     ImVec2 canvasMin_, canvasMax_;
-    float panelW_ = 390.f;
+    float panelW_ = 390.f;     // current width of the panel area (0 when collapsed)
+    float panelFullW_ = 390.f; // width of the panel when open
+    bool panelCollapsed_ = false;
+    float panelSlide_ = 0.f;   // 0 open .. 1 collapsed (animated)
+    void togglePanel() { panelCollapsed_ = !panelCollapsed_; }
 
     // ---- logic (app.cpp)
     // ---- projects (project.cpp)

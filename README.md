@@ -108,7 +108,10 @@ ad-hoc signed, so a copy sent to another Mac needs right-click, then Open, the f
 On macOS the app reads native trackpad events to tell two-finger scrolling from a mouse wheel
 and to get pinch gestures (`src/platform_mac.mm`); on other platforms the wheel zooms.
 
-Keys (when not typing): `Space` play/pause the sum · `D` derivative · `C` real/complex ·
+The control panel can be collapsed with the « button (or `Tab`) to give the panes the whole
+window; the floating ☰ button brings it back.
+
+Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum · `D` derivative · `C` real/complex ·
 `3` 2D/3D · `R` reset view.
 
 ## Command line

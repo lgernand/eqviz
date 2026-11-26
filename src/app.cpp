@@ -158,7 +158,12 @@ void App::frame(float dt) {
     ImGuiIO& io = ImGui::GetIO();
     time_ += dt;
     ImVec2 ds = io.DisplaySize;
-    panelW_ = std::min(390.f, std::max(300.f, ds.x * 0.3f));
+    panelFullW_ = std::min(390.f, std::max(300.f, ds.x * 0.3f));
+    {   // slide the panel in / out
+        float target = panelCollapsed_ ? 1.f : 0.f;
+        panelSlide_ += std::clamp(target - panelSlide_, -dt / 0.22f, dt / 0.22f);
+        panelW_ = panelFullW_ * (1.f - theme::smooth(panelSlide_));
+    }
     computePaneRects();
     enterPane(focus_);
     ++frameNo_;
@@ -590,6 +595,7 @@ void App::runScriptedActions() {
         else if (a == "aU") addPane(kAbove);
         else if (a == "aD") addPane(kBelow);
         else if (a == "x") closePane(focus_);
+        else if (a == "hide") togglePanel();
         else if (!a.empty() && a[0] == 'P') plat_.magnify += (float)std::atof(a.c_str() + 1);
         else if (!a.empty() && a[0] == 'S') {
             float dx = 0, dy = 0;
@@ -715,6 +721,7 @@ void App::handleInput(float dt) {
 
 void App::handleKeys() {  // keyboard shortcuts act on the focused pane (only when not typing)
     if (!ImGui::GetIO().WantTextInput) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) togglePanel();
         if (ImGui::IsKeyPressed(ImGuiKey_Space) && hasSum_) {
             if (sumPlaying_) sumPlaying_ = false;
             else {

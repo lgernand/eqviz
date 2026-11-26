@@ -137,8 +137,25 @@ static void labelRow(const char* label, float labelW = 120.f) {
 
 void App::drawPanel() {
     ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(panelW_, io.DisplaySize.y));
+    if (panelSlide_ > 0.5f) {  // collapsed: a small floating button brings the panel back
+        ImGui::SetNextWindowPos(ImVec2(10, 10));
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::Begin("##expand", nullptr,
+                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.09f, 0.10f, 0.125f, 0.92f));
+        ImGui::PushFont(fonts_.ui, 18.f);
+        if (ImGui::Button("\xE2\x98\xB0", ImVec2(40, 40))) togglePanel();
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        ImGui::SetItemTooltip("Show the control panel (Tab)");
+        ImGui::End();
+    }
+    if (panelSlide_ >= 0.999f) return;
+    ImGui::SetNextWindowPos(ImVec2(panelW_ - panelFullW_, 0));
+    ImGui::SetNextWindowSize(ImVec2(panelFullW_, io.DisplaySize.y));
     ImGui::Begin("##panel", nullptr,
                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
@@ -162,6 +179,12 @@ void App::drawPanel() {
         ImGui::PopFont();
         ImGui::PopStyleColor();
         ImGui::EndGroup();
+        // collapse button in the top-right corner
+        const float bs = 30;
+        ImGui::SetCursorScreenPos(ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - bs - 14, p.y));
+        if (ImGui::Button("\xC2\xAB", ImVec2(bs, bs))) togglePanel();
+        ImGui::SetItemTooltip("Hide the control panel (Tab)");
+        ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + 44));
     }
 
     // ---- project & functions
@@ -420,7 +443,7 @@ void App::drawPanel() {
                                      "hover a curve for coordinates");
     ImGui::TextUnformatted("Syntax: 2x, x^2, sin x, e^x, sqrt(x), |x|, n!, pi, i, "
                            "sum(k, 1, n, 1/k^2), prod(k, 1, n, ...), inf. Unknown letters become sliders.");
-    ImGui::TextUnformatted("Keys: Space play sum \xC2\xB7 D derivative \xC2\xB7 C complex \xC2\xB7 3 toggle 3D \xC2\xB7 R reset");
+    ImGui::TextUnformatted("Keys: Tab hide panel \xC2\xB7 Space play sum \xC2\xB7 D derivative \xC2\xB7 C complex \xC2\xB7 3 toggle 3D \xC2\xB7 R reset");
     ImGui::PopTextWrapPos();
     ImGui::PopFont();
     ImGui::PopStyleColor();
@@ -428,13 +451,15 @@ void App::drawPanel() {
     ImGui::PopFont();
     ImGui::End();
 
-    ImGui::GetBackgroundDrawList()->AddLine(ImVec2(panelW_, 0), ImVec2(panelW_, io.DisplaySize.y), col(WHITE, 0.07f));
+    if (panelW_ > 1) ImGui::GetBackgroundDrawList()->AddLine(ImVec2(panelW_, 0), ImVec2(panelW_, io.DisplaySize.y), col(WHITE, 0.07f));
 }
 
 // ------------------------------------------------------------------ canvas labels
 
 void App::drawOverlay(ImDrawList* dl) {
-    const float x = canvasMin_.x + 28;
+    // leave room for the floating "show panel" button when the panel is collapsed
+    const bool underButton = panelSlide_ > 0.5f && canvasMin_.x < 8 && canvasMin_.y < 8;
+    const float x = canvasMin_.x + (underButton ? 76 : 28);
     float y = canvasMin_.y + 24;
     const float maxW = canvasMax_.x - x - 260;
     const char* prime = "\xE2\x80\xB2";
