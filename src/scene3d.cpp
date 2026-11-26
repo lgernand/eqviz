@@ -243,6 +243,20 @@ void App::drawScene3D(ImDrawList* dl) {
             if (okv[k]) { zmin = std::min(zmin, h); zmax = std::max(zmax, h); }
             P[k] = Vec3(x, y, h * hs);
         }
+    if (!complex_) {
+        // Where a real function stops being real (e.g. sqrt of a negative), drop the
+        // boundary vertices onto the floor so the surface ends in a clean rim.
+        std::vector<char> rim(okv.size(), 0);
+        for (int i = 0; i <= N; ++i)
+            for (int j = 0; j <= N; ++j) {
+                size_t k = (size_t)i * (N + 1) + j;
+                if (okv[k] || !finiteC(vals[k])) continue;
+                bool nb = (i > 0 && okv[k - (N + 1)]) || (i < N && okv[k + (N + 1)]) || (j > 0 && okv[k - 1]) || (j < N && okv[k + 1]);
+                if (nb) rim[k] = 1;
+            }
+        for (size_t k = 0; k < okv.size(); ++k)
+            if (rim[k]) { okv[k] = 1; P[k].z = 0; }
+    }
     const float sa = surfOpacity_ * std::min(1.f, hs * 2.f) * fade_;
     if (sa > 0.005f) {
         Vec3 L = normalize(cam_.up * 0.9 - cam_.fwd * 0.6 - cam_.right * 0.35);

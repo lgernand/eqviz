@@ -172,7 +172,7 @@ struct LaunchOptions {
     double sumPos = -1;
     int width = 1560, height = 940;
     std::string actions;
-    std::string project;  // project file to open, or "demo:riemann"
+    std::string project;  // project file to open, or "demo:riemann" / "demo:poincare"
     float mouseX = -1, mouseY = -1;  // testing: fake cursor position  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
 };
 
@@ -216,7 +216,8 @@ using CplxVec = std::vector<cplx>;
     X(CplxVec, surfVals_, {}) X(uint64_t, surfHash_, 0) X(SegList, curveSegs_, {}) X(uint64_t, curveHash_, 0) \
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
     X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
-    X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)
+    X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)               \
+    X(bool, lockZScale_, false)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -244,6 +245,7 @@ public:
     std::vector<FuncDef> funcs_;
     int focusRow_ = -1, nextRowId_ = 0;
     char projName_[128] = "Untitled";
+    std::string projNote_;  // short description shown under the project name
     std::string projStatus_;
     double projStatusTime_ = -10;
 
@@ -288,6 +290,7 @@ public:
     void setSingleFunction(const char* eq);
     void newProject();
     void loadDemoRiemann();
+    void loadDemoPoincare();
     bool saveProject(const std::string& path);
     bool loadProject(const std::string& path);
     std::string projectDir() const;

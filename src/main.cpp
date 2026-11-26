@@ -158,7 +158,7 @@ static void usage() {
         "  --frames N         render N frames at 60 fps, then exit\n"
         "  --shot file.bmp    with --frames: save the last frame\n"
         "  --sum-pos T        freeze the summation player at T terms\n"
-        "  --project FILE     open a saved project (or \"demo:riemann\")\n");
+        "  --project FILE     open a saved project, or demo:riemann / demo:poincare\n");
 }
 
 int main(int argc, char** argv) {

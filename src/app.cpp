@@ -88,6 +88,7 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
     want3D_ = o.threeD;
     std::thread([] { eq::warmZetaZeros(); }).detach();  // tabulate zeta zeros in the background
     if (o.project == "demo:riemann") loadDemoRiemann();
+    else if (o.project == "demo:poincare") loadDemoPoincare();
     else if (!o.project.empty() && loadProject(o.project)) {}
     else {
         setSingleFunction(o.eq.empty() ? kDefaultEq : o.eq.c_str());
@@ -193,7 +194,7 @@ void App::applyFit() {
     double sx = w / std::max(1e-9f, r.y - r.x), sy = h / std::max(1e-9f, r.w - r.z);
     view_.cx = (r.x + r.y) * 0.5;
     view_.cy = (r.z + r.w) * 0.5;
-    if (complex_ || threeD_) { view_.scale = std::min(sx, sy); view_.aspect = 1; }
+    if (complex_ || threeD_ || want3D_) { view_.scale = std::min(sx, sy); view_.aspect = 1; }
     else { view_.scale = sx; view_.aspect = sy / sx; }
     targetScale_ = view_.scale;
     zooming_ = false;
@@ -566,7 +567,7 @@ void App::startDim(bool to3D) {
 }
 
 void App::autoZScale() {
-    if (!f_.ok()) return;
+    if (!f_.ok() || lockZScale_) return;
     EvalEnv env = makeEnv(INFINITY);
     std::vector<double> mags;
     const int N = 24;

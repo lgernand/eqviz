@@ -51,6 +51,10 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   smooth R(x), |ζ(½ + ix)| touching zero at each γₖ, and the explicit-formula curve
   π_N(x) = R(x) − Σ 2 Re R(x^ρₖ), built from the first N zeros. The player adds zeros one
   at a time and the curve locks onto the staircase.
+- **Poincaré conjecture demo** (Project, then Open): Ricci flow ∂g/∂t = −2 Ric(g) in four
+  panes driven by the time slider t. A dumbbell's neck pinches off first and the pieces round
+  out (schematic: each cross-section follows r² → r² − 4t). A round sphere shrinks to a point
+  with radius² = 1 − 4t. Curvature R = 6/ρ² and volume V = 2π²ρ³ are plotted against time.
 - **Number theory and special functions**: `isprime(n)`, `mobius(n)`, `zetazero(k)` (the
   k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.

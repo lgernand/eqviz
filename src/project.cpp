@@ -110,6 +110,7 @@ void App::rebuildProject(bool sameRow) {
 // ------------------------------------------------------------------ project lifecycle
 
 void App::resetForProject() {
+    projNote_.clear();
     const int start = cur_;
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
@@ -120,6 +121,7 @@ void App::resetForProject() {
         hiddenRows_.clear();
         rowCache_.clear();
         gridStep_ = 0;
+        lockZScale_ = false;
     }
     enterPane(start);
     funcs_.clear();
@@ -167,6 +169,9 @@ void App::loadDemoRiemann() {
         funcs_.push_back(d);
     }
     std::strncpy(projName_, "Riemann Hypothesis", sizeof projName_);
+    projNote_ = "Riemann's explicit formula rebuilds the prime staircase from the zeros of zeta. "
+                "The Riemann Hypothesis says every nontrivial zero lies on Re(s) = 1/2, which keeps "
+                "the error in the prime count as small as possible.";
     Param n;
     n.name = "N";
     n.value = 30;
@@ -201,6 +206,81 @@ void App::loadDemoRiemann() {
     rebuildProject(true);
 }
 
+// Poincare conjecture (Perelman 2003): every closed, simply connected 3-manifold is
+// homeomorphic to the 3-sphere. The proof runs Hamilton's Ricci flow
+// dg/dt = -2 Ric(g): round spheres shrink to points, and thin necks pinch off and are
+// removed by surgery, so the manifold is shown to be a union of round spheres.
+void App::loadDemoPoincare() {
+    struct Row { const char* eq; int color; };
+    static const Row rows[] = {
+        // a dumbbell: two round bulbs (radius 0.95) joined by a thin neck; P is the squared radius
+        {"P(x) = 0.9025 - (abs(x) - 1)^2 + 0.22 e^(-6x^2)", GREY},              // 0
+        {"r(x) = sqrt(P(x) - 4t)", YELLOW_C},                                    // 1 profile at time t
+        {"q(x) = -r(x)", YELLOW_C},                                              // 2
+        {"b(x) = sqrt(P(x))", GREY},                                             // 3 profile at t = 0
+        {"c(x) = -b(x)", GREY},                                                  // 4
+        {"M(x, y) = sqrt(r(x)^2 - y^2)", BLUE_C},                                // 5 the neck, in 3D
+        {"rho(s) = sqrt(1 - 4s)", BLUE_C},                                       // 6 radius of S^3 under the flow
+        {"R(s) = 6 / rho(s)^2", RED_C},                                          // 7 scalar curvature 6/r^2
+        {"V(s) = 2 pi^2 rho(s)^3", GREEN_C},                                     // 8 volume of S^3
+        {"S(x, y) = sqrt(rho(t)^2 - x^2 - y^2)", PURPLE_C},                      // 9 a round sphere shrinking
+    };
+    if (threeD_ && !dimAnimating_) startDim(false);
+    setPanes(4, 1);
+    resetForProject();
+    for (const Row& r : rows) {
+        FuncDef d;
+        std::strncpy(d.input, r.eq, sizeof d.input - 1);
+        d.color = r.color;
+        d.id = nextRowId_++;
+        funcs_.push_back(d);
+    }
+    std::strncpy(projName_, "Poincare conjecture", sizeof projName_);
+    projNote_ = "Every closed, simply connected 3-manifold is a 3-sphere (Perelman, 2003). The proof runs "
+                "Ricci flow  \xE2\x88\x82g/\xE2\x88\x82t = \xE2\x88\x92" "2 Ric(g): round spheres shrink to a point "
+                "(radius\xC2\xB2 = 1 \xE2\x88\x92 4t, curvature R = 6/radius\xC2\xB2), while thin necks pinch off "
+                "first and are removed by surgery. The neck here is schematic: each cross-section follows "
+                "radius\xC2\xB2 \xE2\x86\x92 radius\xC2\xB2 \xE2\x88\x92 4t. Slider t is the flow's time.";
+    Param t;
+    t.name = "t";
+    t.value = 0;
+    t.min = 0;
+    t.max = 0.24f;
+    t.playing = true;  // run the flow back and forth
+    params_ = {t};
+
+    auto hideAllBut = [&](std::initializer_list<int> keep) {
+        hiddenRows_.clear();
+        for (int i = 0; i < (int)funcs_.size(); ++i)
+            if (std::find(keep.begin(), keep.end(), i) == keep.end()) hiddenRows_.insert(funcs_[i].id);
+    };
+    auto setup = [&](int pane, int active, bool want3D, ImVec4 fit) {
+        enterPane(pane);
+        active_ = active;
+        if (threeD_) startDim(false);
+        complex_ = false;
+        fade_ = 1;
+        fadeStage_ = 0;
+        want3D_ = want3D;
+        fitPending_ = true;
+        fitRange_ = fit;
+    };
+    setup(0, 5, true, ImVec4(-3.f, 3.f, -3.f, 3.f));          // 3D: dumbbell pinching at the neck
+    surfRes_ = 110;
+    lockZScale_ = true;  // true proportions: these are shapes, not graphs
+    zScale_ = 1;
+    setup(1, 9, true, ImVec4(-1.6f, 1.6f, -1.6f, 1.6f));      // 3D: round sphere shrinking to a point
+    surfRes_ = 90;
+    lockZScale_ = true;
+    zScale_ = 1;
+    setup(2, 1, false, ImVec4(-2.2f, 2.2f, -1.25f, 1.25f));   // profile of the dumbbell over time
+    hideAllBut({1, 2, 3, 4});
+    setup(3, 7, false, ImVec4(-0.015f, 0.265f, -1.f, 24.f));  // radius, curvature, volume vs time
+    hideAllBut({6, 7, 8});
+    focus_ = 2;
+    rebuildProject(true);
+}
+
 std::string App::projectDir() const {
     const char* home = std::getenv("HOME");
 #ifdef _WIN32
@@ -217,6 +297,7 @@ bool App::saveProject(const std::string& path) {
     if (!out) return false;
     out << "eqviz-project 1\n";
     out << "name\t" << projName_ << "\n";
+    if (!projNote_.empty()) out << "note\t" << projNote_ << "\n";
     out << "mode\t" << (complex_ ? 1 : 0) << "\t" << (threeD_ ? 1 : 0) << "\n";
     out << "view\t" << view_.cx << "\t" << view_.cy << "\t" << view_.scale << "\t" << view_.aspect << "\n";
     out << "sum\t" << sumSpeed_ << "\t" << (sumAccel_ ? 1 : 0) << "\t" << animTerms_ << "\t" << maxTerms_ << "\n";
@@ -257,7 +338,7 @@ bool App::loadProject(const std::string& path) {
     int layoutN = 0, layoutKind = 1, layoutFocus = 0;
     int act = 0;
     bool wantComplex = false, want3D = false;
-    std::string name = fs::path(path).stem().string();
+    std::string name = fs::path(path).stem().string(), note;
     double vcx = 0, vcy = 0, vs = 72, va = 1;
     auto split = [](const std::string& s) {
         std::vector<std::string> v;
@@ -272,6 +353,7 @@ bool App::loadProject(const std::string& path) {
         if (f.empty()) continue;
         try {
             if (f[0] == "name" && f.size() > 1) name = f[1];
+            else if (f[0] == "note" && f.size() > 1) note = f[1];
             else if (f[0] == "mode" && f.size() > 2) { wantComplex = f[1] == "1"; want3D = f[2] == "1"; }
             else if (f[0] == "view" && f.size() > 4) { vcx = std::stod(f[1]); vcy = std::stod(f[2]); vs = std::stod(f[3]); va = std::stod(f[4]); }
             else if (f[0] == "sum" && f.size() > 4) {
@@ -323,6 +405,7 @@ bool App::loadProject(const std::string& path) {
     funcs_ = std::move(fs);
     params_ = ps;
     std::strncpy(projName_, name.c_str(), sizeof projName_ - 1);
+    projNote_ = note;
     for (int i = 0; i < (int)panes_.size(); ++i) {
         const PaneSpec& p = paneSpecs[i];
         enterPane(i);
@@ -372,6 +455,7 @@ void App::drawProjectSection() {
     if (ImGui::BeginPopup("##open")) {
         ImGui::TextDisabled("Demo");
         if (ImGui::Selectable("Riemann Hypothesis: primes from zeta zeros")) loadDemoRiemann();
+        if (ImGui::Selectable("Poincar\xC3\xA9 conjecture: Ricci flow with surgery")) loadDemoPoincare();
         ImGui::Separator();
         ImGui::TextDisabled("Saved in ~/Documents/eqviz");
         std::vector<fs::path> files;
@@ -384,6 +468,15 @@ void App::drawProjectSection() {
             if (ImGui::Selectable(p.stem().string().c_str()))
                 status(*this, loadProject(p.string()) ? "Opened " + p.filename().string() : "Could not read " + p.string());
         ImGui::EndPopup();
+    }
+    if (!projNote_.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::PushFont(nullptr, 13.f);
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextUnformatted(projNote_.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
     }
     if (time_ - projStatusTime_ < 5 && !projStatus_.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
