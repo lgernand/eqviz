@@ -179,6 +179,7 @@ int main(int argc, char** argv) {
         else if (a == "--size") std::sscanf(next().c_str(), "%dx%d", &opt.width, &opt.height);
         else if (a == "--actions") opt.actions = next();
         else if (a == "--project") opt.project = next();
+        else if (a == "--bench") opt.bench = std::atoi(next().c_str());
         else if (a == "--render-icon") { renderIcon = next(); opt.width = opt.height = 512; }
         else if (a == "--mouse") std::sscanf(next().c_str(), "%f,%f", &opt.mouseX, &opt.mouseY);
         else if (a == "--drag") std::sscanf(next().c_str(), "%f,%f,%f,%f,%f", &opt.drag[0], &opt.drag[1], &opt.drag[2], &opt.drag[3], &opt.drag[4]);
@@ -276,6 +277,7 @@ int main(int argc, char** argv) {
     double last = glfwGetTime();
     int frame = 0;
     double cpuMs = 0;
+    std::vector<double> frameMs;
     ImVec4 bg = theme::colv(theme::BG);
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -299,7 +301,9 @@ int main(int argc, char** argv) {
         ImGui::NewFrame();
         app.frame(dt);
         ImGui::Render();
-        cpuMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        cpuMs += ms;
+        if (frame > 60) frameMs.push_back(ms);  // skip start-up (fonts, sieve, zero table)
 
         int fw, fh;
         glfwGetFramebufferSize(window, &fw, &fh);
@@ -316,6 +320,13 @@ int main(int argc, char** argv) {
                 saveBMP(opt.shot.c_str(), fw, fh, px);
             }
             std::printf("average CPU time per frame: %.2f ms over %d frames\n", cpuMs / frame, frame);
+            if (!frameMs.empty()) {
+                std::sort(frameMs.begin(), frameMs.end());
+                double sum = 0;
+                for (double v : frameMs) sum += v;
+                std::printf("steady state: mean %.2f ms, p95 %.2f ms, max %.2f ms\n", sum / frameMs.size(),
+                            frameMs[(size_t)(frameMs.size() * 0.95)], frameMs.back());
+            }
             break;
         }
         glfwSwapBuffers(window);

@@ -173,6 +173,7 @@ struct LaunchOptions {
     double sumPos = -1;
     int width = 1560, height = 940;
     std::string actions;
+    int bench = 0;        // testing: 1 = pan every pane each frame, 2 = zoom every pane each frame
     std::string project;  // project file to open, or "demo:riemann" / "demo:poincare"
     float mouseX = -1, mouseY = -1;  // testing: fake cursor position
     float drag[5] = {-1, 0, 0, 0, 0};  // testing: x0, y0, x1, y1, start frame of a simulated drag  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
@@ -180,13 +181,24 @@ struct LaunchOptions {
 
 // ------------------------------------------------------------------ panes
 
+// Samples of a curve on a column grid fixed in world coordinates (x = k / scale), so a
+// pan only computes the newly exposed columns and a vertical pan computes nothing.
+struct ColumnCache {
+    uint64_t key = 0;   // what the values depend on (function, parameters...), not the view
+    double scale = 0;
+    long k0 = 0;        // column index of ys[0]
+    bool coarse = false;  // some columns interpolated during a zoom; refine once it settles
+    std::vector<double> ys;
+};
+
 struct RowCache {
     std::vector<std::vector<ImVec2>> segs;
     uint64_t hash = 0;
+    ColumnCache cc;
 };
 using SegList = std::vector<std::vector<ImVec2>>;
 using GridLines = std::vector<std::vector<std::vector<cplx>>>;
-using SumYsMap = std::map<int, std::vector<double>>;
+using SumYsMap = std::map<int, ColumnCache>;
 using RowCacheMap = std::map<int, RowCache>;
 using IntSet = std::set<int>;
 using U32Vec = std::vector<uint32_t>;
@@ -219,7 +231,10 @@ using CplxVec = std::vector<cplx>;
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
     X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
     X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)               \
-    X(bool, lockZScale_, false)
+    X(bool, lockZScale_, false) X(ColumnCache, activeCC_, {}) X(ColumnCache, derivCC_, {})            \
+    X(double, lastScale_, 0) X(double, scaleChangeT_, -10) X(bool, zoomingNow_, false)                 \
+    X(double, gridVcx_, 0) X(double, gridVcy_, 0) X(double, gridVscale_, 0) X(double, gridVw_, 0)      \
+    X(double, gridVh_, 0) X(uint64_t, gridContentHash_, 0)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -363,8 +378,10 @@ public:
     void drawComplexGrid(ImDrawList* dl, float alpha);
     void drawDomainColoring(ImDrawList* dl, float alpha);
     void sampleCurve(const std::function<double(double)>& F, std::vector<std::vector<ImVec2>>& segs) const;
-    void sampleYs(const std::function<double(double)>& F, std::vector<double>& ys) const;  // one value per pixel column
-    void segsFromYs(const std::vector<double>& ys, const std::function<double(double)>& F,
+    // Values for the columns covering the view (x0 = x of ys[0], spacing 1 / scale), reusing cc.
+    void sampleCached(const std::function<double(double)>& F, uint64_t key, ColumnCache& cc,
+                      std::vector<double>& ys, double& x0) const;
+    void segsFromYs(const std::vector<double>& ys, double x0, const std::function<double(double)>& F,
                     std::vector<std::vector<ImVec2>>& segs) const;
     void warpedGrid();     // fills gridLines_ / gridKinds_
     void fitGridToView();  // input grid of the complex transform = the current view

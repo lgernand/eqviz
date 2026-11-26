@@ -126,42 +126,74 @@ void App::drawPlane2D(ImDrawList* dl, float la, bool labels) {
 
 // ------------------------------------------------------------------ real graphs
 
-// Columns: x_i = x0 + i dx, one per pixel (plus one on each side).
-static void columnGrid(const View2D& v, int& N, double& x0, double& dx) {
-    N = (int)(v.cmax.x - v.cmin.x) + 2;
-    dx = 1.0 / v.scale;
-    double yy;
-    v.s2w(v.cmin, x0, yy);
-    x0 -= dx;
-}
-
-void App::sampleYs(const std::function<double(double)>& F, std::vector<double>& ys) const {
-    int N;
-    double x0, dx;
-    columnGrid(view_, N, x0, dx);
-    ys.assign((size_t)N + 1, NAN);
-    // evaluate every column in parallel (series can be expensive)
-    const int chunk = 48, nChunks = (N + chunk) / chunk;
+void App::sampleCached(const std::function<double(double)>& F, uint64_t key, ColumnCache& cc,
+                       std::vector<double>& out, double& x0) const {
+    const View2D& v = view_;
+    const double scale = v.scale;
+    double xl, xr, yy;
+    v.s2w(v.cmin, xl, yy);
+    v.s2w(v.cmax, xr, yy);
+    const long kL = (long)std::floor(xl * scale) - 2, kR = (long)std::ceil(xr * scale) + 2;
+    const int stride = zoomingNow_ ? 3 : 1;  // lighter sampling while a zoom is in progress
+    const bool reuse = cc.key == key && cc.scale == scale && !cc.ys.empty() && !(cc.coarse && stride == 1);
+    std::vector<double> ys((size_t)(kR - kL + 1), NAN);
+    std::vector<long> todo;
+    // mid-zoom: reproject the previous samples onto the new columns instead of re-evaluating
+    const bool reproject = !reuse && zoomingNow_ && cc.key == key && cc.scale > 0 && cc.ys.size() > 2;
+    bool reprojected = false;
+    for (long k = kL; k <= kR; ++k) {
+        long j = k - cc.k0;
+        if (reuse && j >= 0 && j < (long)cc.ys.size()) { ys[k - kL] = cc.ys[j]; continue; }
+        if (reproject) {
+            double u = (double)k / scale * cc.scale - cc.k0;  // position in the old column grid
+            long j0 = (long)std::floor(u);
+            if (j0 >= 0 && j0 + 1 < (long)cc.ys.size()) {
+                double a = cc.ys[j0], b = cc.ys[j0 + 1], t = u - j0;
+                if (std::isfinite(a) && std::isfinite(b)) { ys[k - kL] = a + (b - a) * t; reprojected = true; continue; }
+                if (std::isfinite(a) && t < 0.5) { ys[k - kL] = a; reprojected = true; continue; }
+                if (std::isfinite(b) && t >= 0.5) { ys[k - kL] = b; reprojected = true; continue; }
+                if (!std::isfinite(a) && !std::isfinite(b)) { reprojected = true; continue; }  // stays a gap
+            }
+        }
+        if (stride == 1 || k % stride == 0 || k == kL || k == kR) todo.push_back(k);
+    }
+    const int chunk = 32, nChunks = ((int)todo.size() + chunk - 1) / chunk;
     parallelFor(nChunks, [&](int ci) {
-        for (int i = ci * chunk; i <= std::min(N, ci * chunk + chunk - 1); ++i) ys[i] = F(x0 + i * dx);
+        for (int i = ci * chunk; i < std::min((int)todo.size(), ci * chunk + chunk); ++i)
+            ys[todo[i] - kL] = F(todo[i] / scale);
     });
+    bool coarse = (reuse && cc.coarse) || reprojected;
+    if (stride > 1) {  // fill skipped columns by linear interpolation
+        for (long k = kL; k <= kR; ++k) {
+            size_t i = (size_t)(k - kL);
+            if (!std::isnan(ys[i]) || (k % stride == 0)) continue;
+            long a = k - ((k % stride) + stride) % stride, b = a + stride;
+            if (a < kL || b > kR) continue;
+            double ya = ys[a - kL], yb = ys[b - kL];
+            if (std::isfinite(ya) && std::isfinite(yb)) { ys[i] = ya + (yb - ya) * (double)(k - a) / stride; coarse = true; }
+        }
+    }
+    cc.key = key;
+    cc.scale = scale;
+    cc.k0 = kL;
+    cc.coarse = coarse;
+    cc.ys = ys;
+    out.swap(ys);
+    x0 = kL / scale;
 }
 
-void App::segsFromYs(const std::vector<double>& ys, const std::function<double(double)>& F,
+void App::segsFromYs(const std::vector<double>& ys, double x0, const std::function<double(double)>& F,
                      std::vector<std::vector<ImVec2>>& segs) const {
     const View2D& v = view_;
     const float H = v.cmax.y - v.cmin.y, lim = 3 * H;
-    int N;
-    double x0, dx;
-    columnGrid(v, N, x0, dx);
-    N = std::min(N, (int)ys.size() - 1);
+    const double dx = 1.0 / v.scale;
     std::vector<ImVec2> cur;
     double prevY = NAN;
     auto flush = [&] {
         if (cur.size() >= 2) segs.push_back(cur);
         cur.clear();
     };
-    for (int i = 0; i <= N; ++i) {
+    for (size_t i = 0; i < ys.size(); ++i) {
         double x = x0 + i * dx, y = ys[i];
         if (!std::isfinite(y)) { flush(); prevY = NAN; continue; }
         if (std::isfinite(prevY) && std::fabs((y - prevY) * v.yscale()) > H * 0.5f) {  // jump or asymptote?
@@ -178,9 +210,11 @@ void App::segsFromYs(const std::vector<double>& ys, const std::function<double(d
 }
 
 void App::sampleCurve(const std::function<double(double)>& F, std::vector<std::vector<ImVec2>>& segs) const {
+    ColumnCache scratch;
     std::vector<double> ys;
-    sampleYs(F, ys);
-    segsFromYs(ys, F, segs);
+    double x0;
+    sampleCached(F, 0, scratch, ys, x0);
+    segsFromYs(ys, x0, F, segs);
 }
 
 void App::drawRealCurves(ImDrawList* dl, float alpha) {
@@ -207,54 +241,63 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
         FuncDef& d = funcs_[i];
         if ((int)i == active_ || !rowVisible(d) || !d.f.ok()) continue;
         RowCache& rc = rowCache_[d.id];
-        Hasher hh;
-        hh.u((uint64_t)(uintptr_t)d.plot.get());
-        for (double p : pvals_) hh.d(p);
-        hh.u((uint64_t)maxTerms_);
+        Hasher key;
+        key.u((uint64_t)(uintptr_t)d.plot.get());
+        for (double p : pvals_) key.d(p);
+        key.u((uint64_t)maxTerms_);
+        Hasher hh = key;
         hh.d(v.cx); hh.d(v.cy); hh.d(v.scale); hh.d(v.aspect);
         hh.d(v.cmin.x); hh.d(v.cmin.y); hh.d(v.cmax.x); hh.d(v.cmax.y);
+        hh.u(zoomingNow_ ? 1 : 0);
         if (hh.h != rc.hash) {
             rc.hash = hh.h;
             rc.segs.clear();
             const Func& fn = d.f;
-            sampleCurve([&](double x) { return realPart(evalF(fn, x, 0, envFull)); }, rc.segs);
+            auto Fd = [&](double x) { return realPart(evalF(fn, x, 0, envFull)); };
+            std::vector<double> ys;
+            double x0;
+            sampleCached(Fd, key.h, rc.cc, ys, x0);
+            segsFromYs(ys, x0, Fd, rc.segs);
         }
         strokePolylines(dl, rc.segs, col(d.color, alpha), 3.0f);
     }
 
     // Partial sums only change at whole term counts and the player blends linearly
     // between them, so cache the active curve per term count (k = -1: the full sum).
+    uint64_t sumKey;
     {
         Hasher hh;
         hh.u((uint64_t)(uintptr_t)expr_.get());
         for (double p : pvals_) hh.d(p);
         hh.u((uint64_t)maxTerms_); hh.u((uint64_t)animTerms_);
-        hh.d(v.cx); hh.d(v.cy); hh.d(v.scale); hh.d(v.aspect);
-        hh.d(v.cmin.x); hh.d(v.cmin.y); hh.d(v.cmax.x); hh.d(v.cmax.y);
+        sumKey = hh.h;
         if (hh.h != sumYsHash_) { sumYsHash_ = hh.h; sumYs_.clear(); }
     }
     auto partialF = [this](int k) {
         EvalEnv e = makeEnv(k < 0 ? INFINITY : (double)k);
         return std::function<double(double)>([this, e](double x) { return realPart(evalF(f_, x, 0, e)); });
     };
+    double sumX0 = 0;
+    std::map<int, std::vector<double>> frameYs;  // this frame's columns per term count
     auto ysAt = [&](int k) -> const std::vector<double>& {
-        auto it = sumYs_.find(k);
-        if (it != sumYs_.end()) return it->second;
-        if (sumYs_.size() > 12) sumYs_.erase(sumYs_.begin());
-        std::vector<double>& ys = sumYs_[k];
-        sampleYs(partialF(k), ys);
+        auto it = frameYs.find(k);
+        if (it != frameYs.end()) return it->second;
+        if (sumYs_.size() > 12 && !sumYs_.count(k)) sumYs_.erase(sumYs_.begin());
+        std::vector<double>& ys = frameYs[k];
+        sampleCached(partialF(k), sumKey ^ (uint64_t)(k + 7) * 0x9E3779B97F4A7C15ull, sumYs_[k], ys, sumX0);
         return ys;
     };
 
-    // fading trail of previous partial sums
-    if (hasSum_ && sumTrail_ && activeVisible) {
+    // fading trail of previous partial sums (only while the sum is being played)
+    if (hasSum_ && sumTrail_ && activeVisible && !(sumShowAll_ && !sumPlaying_)) {
         double lim = std::min<double>(sumLimit(), sumCount_);
         int n = (int)std::floor(lim + 1e-9);
         for (int j = 1; j <= 3; ++j) {
             int k = n - j;
             if (k < 1) break;
             std::vector<std::vector<ImVec2>> segs;
-            segsFromYs(ysAt(k), partialF(k), segs);
+            const std::vector<double>& ys = ysAt(k);
+            segsFromYs(ys, sumX0, partialF(k), segs);
             strokePolylines(dl, segs, lerpCol(col(activeColor, 0.42f * alpha / j), col(BLUE_C, 0.42f * alpha / j), 0.25f * j), 2.0f, 1.f, false);
         }
     }
@@ -264,27 +307,32 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
         hh.u(evalHash());
         hh.d(v.cx); hh.d(v.cy); hh.d(v.scale); hh.d(v.aspect);
         hh.d(v.cmin.x); hh.d(v.cmin.y); hh.d(v.cmax.x); hh.d(v.cmax.y);
+        hh.u(zoomingNow_ ? 1 : 0);
         if (hh.h != curveHash_) {
             curveHash_ = hh.h;
             curveSegs_.clear();
             const double lim = sumLimit();
             if (hasSum_ && !morphing) {
                 if (std::isinf(lim)) {
-                    segsFromYs(ysAt(-1), F, curveSegs_);
+                    const std::vector<double>& a = ysAt(-1);
+                    segsFromYs(a, sumX0, F, curveSegs_);
                 } else {
                     int n = (int)std::floor(lim);
                     double fr = lim - n;
                     const std::vector<double>& a = ysAt(n);
-                    if (fr < 1e-9) segsFromYs(a, F, curveSegs_);
+                    if (fr < 1e-9) segsFromYs(a, sumX0, F, curveSegs_);
                     else {
                         const std::vector<double>& b = ysAt(n + 1);
                         std::vector<double> ys(std::min(a.size(), b.size()));
                         for (size_t i = 0; i < ys.size(); ++i) ys[i] = a[i] + (b[i] - a[i]) * fr;
-                        segsFromYs(ys, F, curveSegs_);
+                        segsFromYs(ys, sumX0, F, curveSegs_);
                     }
                 }
             } else {
-                sampleCurve(F, curveSegs_);
+                std::vector<double> ys;
+                double x0;
+                sampleCached(F, evalHash(), activeCC_, ys, x0);
+                segsFromYs(ys, x0, F, curveSegs_);
             }
         }
     }
@@ -331,7 +379,15 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
     if (!deriv_ || !fx_.ok()) { hover(); return; }
     const float da = alpha * smooth(derivCreate_);
     auto G = [&](double x) { return realPart(evalF(fx_, x, 0, env)); };
-    sampleCurve(G, dsegs);
+    {
+        std::vector<double> ys;
+        double x0;
+        Hasher dk;
+        dk.u(evalHash());
+        dk.u(0xD5);
+        sampleCached(G, dk.h, derivCC_, ys, x0);
+        segsFromYs(ys, x0, G, dsegs);
+    }
     strokePolylines(dl, dsegs, col(GREEN_C, alpha), 2.8f, smooth(derivCreate_));
 
     double x0 = probeX_, y0 = F(x0), m = G(x0);
@@ -364,7 +420,8 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
 template <class WF>
 static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<std::vector<cplx>>& out) {
     const float Wd = v.cmax.x - v.cmin.x, H = v.cmax.y - v.cmin.y;
-    const float L = v.cmin.x - 60, R = v.cmax.x + 60, T = v.cmin.y - 60, B = v.cmax.y + 60;
+    // subdivide a margin of half a pane beyond the edges so reused lines stay smooth after a pan
+    const float L = v.cmin.x - 0.6f * Wd, R = v.cmax.x + 0.6f * Wd, T = v.cmin.y - 0.6f * H, B = v.cmax.y + 0.6f * H;
     const float maxD = 6.f, jumpD = std::max(Wd, H) * 0.9f;
     const int maxDepth = 14;  // off-screen pieces are never subdivided, so depth is cheap
     float lenPx = (float)(std::abs(b - a) * v.scale);
@@ -433,13 +490,22 @@ void App::fitGridToView() {
 void App::warpedGrid() {
     const View2D& v = view_;
     if (!(gridStep_ > 0)) fitGridToView();
+    // The warped lines live in world coordinates, so small pans and zooms can reuse them;
+    // only refine after a big zoom (>25%) or a pan of more than half a pane.
     Hasher hh;
     hh.u(evalHash());
-    hh.d(gridX0_); hh.d(gridX1_); hh.d(gridY0_); hh.d(gridY1_); hh.d(gridStep_);
-    hh.d(gridT_); hh.d(v.cx); hh.d(v.cy); hh.d(v.scale); hh.d(v.aspect);
-    hh.d(v.cmin.x); hh.d(v.cmin.y); hh.d(v.cmax.x); hh.d(v.cmax.y);
-    if (hh.h == gridHash_ && !gridLines_.empty()) return;
-    gridHash_ = hh.h;
+    hh.d(gridX0_); hh.d(gridX1_); hh.d(gridY0_); hh.d(gridY1_); hh.d(gridStep_); hh.d(gridT_);
+    const double vw = v.cmax.x - v.cmin.x, vh = v.cmax.y - v.cmin.y;
+    const bool sameContent = hh.h == gridContentHash_ && gridHash_ != 0 && !gridLines_.empty();
+    const double zr = gridVscale_ > 0 ? v.scale / gridVscale_ : 0;
+    const double zlo = zoomingNow_ ? 0.5 : 0.995, zhi = zoomingNow_ ? 2.0 : 1.005;  // refine once a zoom settles
+    const bool viewClose = zr > zlo && zr < zhi && std::fabs(v.cx - gridVcx_) * v.scale < 0.5 * vw &&
+                           std::fabs(v.cy - gridVcy_) * v.scale < 0.5 * vh && std::fabs(vw - gridVw_) < 1 &&
+                           std::fabs(vh - gridVh_) < 1;
+    if (sameContent && viewClose) return;
+    gridContentHash_ = hh.h;
+    gridHash_ = hh.h | 1;
+    gridVcx_ = v.cx; gridVcy_ = v.cy; gridVscale_ = v.scale; gridVw_ = vw; gridVh_ = vh;
     auto& out = gridLines_;
     auto& kinds = gridKinds_;
     const double x0 = gridX0_, x1 = gridX1_, y0 = gridY0_, y1 = gridY1_;
@@ -581,6 +647,8 @@ void App::drawDomainColoring(ImDrawList* dl, float alpha) {
 // ------------------------------------------------------------------ scene
 
 void App::drawScene2D(ImDrawList* dl) {
+    if (view_.scale != lastScale_) { lastScale_ = view_.scale; scaleChangeT_ = time_; }
+    zoomingNow_ = time_ - scaleChangeT_ < 0.25;
     const float a = fade_;
     if (complex_ && domainColor_) drawDomainColoring(dl, a);
     drawPlane2D(dl, complex_ ? 0.45f : 1.f, true);

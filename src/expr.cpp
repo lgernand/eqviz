@@ -950,10 +950,15 @@ cplx zetaC(cplx s) {
     }
     const int n = std::clamp((int)(22 + 1.3 * std::fabs(s.imag())), 22, 1000);
     const std::vector<double>& w = borweinW(n);
+    static const std::vector<double> logs = [] {
+        std::vector<double> v(1002);
+        for (size_t k = 0; k < v.size(); ++k) v[k] = std::log((double)k + 1);
+        return v;
+    }();
     cplx sum(0);
     for (int k = 0; k < n; ++k) {
         if (w[k] == 0) break;
-        double lk = std::log((double)k + 1);
+        double lk = logs[k];
         double m = std::exp(-s.real() * lk), ph = -s.imag() * lk;
         cplx term = w[k] * cplx(m * std::cos(ph), m * std::sin(ph));
         sum += (k & 1) ? -term : term;
@@ -1016,38 +1021,54 @@ double mobiusInt(double v) {
 
 // ---- exponential integral Ei(z) and logarithmic integral li(z) = Ei(ln z)
 
+// Hot path of the Riemann demo, so it avoids std::complex division and abs (which go
+// through the slow NaN-safe __divdc3 and hypot) in favour of plain arithmetic.
 cplx eiC(cplx z) {
-    if (z == cplx(0, 0)) return cplx(-INFINITY, 0);
+    const double zr = z.real(), zi = z.imag();
+    if (zr == 0 && zi == 0) return cplx(-INFINITY, 0);
     const double EULER = 0.57721566490153286;
-    const double az = std::abs(z);
-    const bool realAxis = z.imag() == 0;
-    if (az <= 16 || (realAxis && z.real() > 0)) {
-        cplx sum(0), term(1);
+    const double n2 = zr * zr + zi * zi;
+    const bool realAxis = zi == 0;
+    if (n2 <= 256 || (realAxis && zr > 0)) {  // power series
+        double sr = 0, si = 0, tr = 1, ti = 0;
         for (int k = 1; k < 4000; ++k) {
-            term *= z / (double)k;
-            cplx add = term / (double)k;
-            sum += add;
-            if (std::abs(add) < 1e-17 * std::abs(sum) && k > 2) break;
+            const double inv = 1.0 / k;
+            const double nr = (tr * zr - ti * zi) * inv, ni = (tr * zi + ti * zr) * inv;
+            tr = nr; ti = ni;
+            const double ar = tr * inv, ai = ti * inv;
+            sr += ar; si += ai;
+            if (k > 2 && ar * ar + ai * ai < 1e-34 * (sr * sr + si * si)) break;
         }
-        cplx lg = realAxis ? cplx(std::log(std::fabs(z.real())), 0) : std::log(z);
-        return EULER + lg + sum;
+        cplx lg = realAxis ? cplx(std::log(std::fabs(zr)), 0) : std::log(z);
+        return EULER + lg + cplx(sr, si);
     }
     // continued fraction for E1(w), w = -z (modified Lentz)
-    const cplx w = -z;
-    const double tiny = 1e-300;
-    cplx b = w + 1.0, c = 1.0 / tiny, d = 1.0 / b, h = d;
+    const double wr = -zr, wi = -zi;
+    auto inv = [](double a, double b, double& r, double& i) {  // 1 / (a + ib)
+        const double d = 1.0 / (a * a + b * b);
+        r = a * d; i = -b * d;
+    };
+    double br = wr + 1, bi = wi, cr = 1e300, ci = 0, dr, di;
+    inv(br, bi, dr, di);
+    double hr = dr, hi = di;
     for (int i = 1; i < 2000; ++i) {
-        double an = -(double)i * i;
-        b += 2.0;
-        d = 1.0 / (an * d + b);
-        c = b + an / c;
-        cplx del = c * d;
-        h *= del;
-        if (std::abs(del - 1.0) < 1e-15) break;
+        const double an = -(double)i * i;
+        br += 2.0;
+        inv(an * dr + br, an * di + bi, dr, di);  // d = 1 / (an d + b)
+        double icr, ici;
+        inv(cr, ci, icr, ici);
+        cr = br + an * icr; ci = bi + an * ici;    // c = b + an / c
+        const double er = cr * dr - ci * di, ei = cr * di + ci * dr;  // del = c d
+        const double nhr = hr * er - hi * ei, nhi = hr * ei + hi * er;
+        hr = nhr; hi = nhi;
+        const double xr = er - 1, xi = ei;
+        if (xr * xr + xi * xi < 1e-30) break;
     }
-    cplx e1 = h * std::exp(-w);
-    double jump = realAxis ? 0.0 : (z.imag() > 0 ? PI : -PI);
-    return -e1 + cplx(0, jump);
+    const double m = std::exp(-wr), ph = -wi;  // exp(-w)
+    const double exr = m * std::cos(ph), exi = m * std::sin(ph);
+    const double e1r = hr * exr - hi * exi, e1i = hr * exi + hi * exr;
+    const double jump = realAxis ? 0.0 : (zi > 0 ? PI : -PI);
+    return cplx(-e1r, -e1i + jump);
 }
 
 // ---- nontrivial zeros of zeta via the Riemann-Siegel Z function
@@ -1265,7 +1286,11 @@ cplx Program::ev(int i, Ctx& c) const {
         case Op::Var: return c.s[in.slot];
         case Op::Add: return ev(in.a, c) + ev(in.b, c);
         case Op::Sub: return ev(in.a, c) - ev(in.b, c);
-        case Op::Mul: return cmul(ev(in.a, c), ev(in.b, c));
+        case Op::Mul: {
+            const cplx a = ev(in.a, c);
+            if (a.real() == 0 && a.imag() == 0) return cplx(0, 0);  // 0 * anything: skip the work
+            return cmul(a, ev(in.b, c));
+        }
         case Op::Div: return cdiv(ev(in.a, c), ev(in.b, c));
         case Op::Pow: return cpow(ev(in.a, c), ev(in.b, c), c.real);
         case Op::Neg: return -ev(in.a, c);

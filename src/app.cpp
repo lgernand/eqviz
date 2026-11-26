@@ -181,6 +181,14 @@ void App::frame(float dt) {
         }
     }
     handleKeys();
+    if (opt_.bench && frameNo_ > 30) {  // benchmark: keep every pane's view moving
+        for (int i = 0; i < (int)panes_.size(); ++i) {
+            enterPane(i);
+            if (opt_.bench == 1) { view_.cx += 3.0 / view_.scale; view_.cy += 1.0 / view_.yscale(); cam_.s.theta += 0.01; }
+            else { double f = std::exp(0.02 * std::sin(frameNo_ * 0.1)); view_.scale *= f; targetScale_ = view_.scale; cam_.s.dist /= f; targetDist_ = cam_.s.dist; }
+        }
+        enterPane(focus_);
+    }
 
     // shared animations: parameter sweeps and the sum player
     for (auto& p : params_) {
