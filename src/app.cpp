@@ -646,39 +646,58 @@ void App::hoverLabel(ImDrawList* dl, ImVec2 at, const ts::Box& b, ImU32 accent) 
 }
 
 void App::drawRotateControl(int pane) {
-    const float pad = 12, h = 34;
-    const bool narrow = canvasMax_.x - canvasMin_.x < 330;
-    const float y = canvasMax_.y - pad - h - (extendWorkspace_ ? 12 : 0);
-    if (y < canvasMin_.y + 40 || canvasMin_.x + pad > visRect_.z - 60 || y > visRect_.w - h) return;
-    ImGui::SetNextWindowPos(ImVec2(canvasMin_.x + pad, y));
-    ImGui::SetNextWindowBgAlpha(0.f);
+    // Minimal text control, only on the pane under the mouse:  rotate | 10.0°/s
+    const ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 m = io.MousePos;
     char id[32];
     snprintf(id, sizeof id, "##spin%d", pane);
+    const bool hovered = m.x >= canvasMin_.x && m.x < canvasMax_.x && m.y >= canvasMin_.y && m.y < canvasMax_.y && inVisible(m);
+    if (!ImGui::IsMouseDown(0) && rotateDragPane_ == pane) rotateDragPane_ = -1;
+    const bool activeHere = rotateDragPane_ == pane;  // keep showing while its speed is being dragged
+    if (!hovered && !activeHere) return;
+    const float pad = 14;
+    const float y = canvasMax_.y - pad - 22 - (extendWorkspace_ ? 12 : 0);
+    if (y < canvasMin_.y + 40) return;
+    ImGui::SetNextWindowPos(ImVec2(canvasMin_.x + pad, y));
     ImGui::Begin(id, nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing);
-    ImGui::PushFont(fonts_.ui, 15.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 9);
-    const ImVec4 off(0.09f, 0.10f, 0.125f, 0.9f), on = theme::colv(theme::BLUE_E, 0.95f);
-    ImGui::PushStyleColor(ImGuiCol_Button, autoRotate_ ? on : off);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, autoRotate_ ? theme::colv(theme::BLUE_D, 0.95f) : ImVec4(0.15f, 0.17f, 0.21f, 0.95f));
-    const char* label = autoRotate_ ? (narrow ? "\xE2\x9F\xB3" : "\xE2\x9F\xB3  Rotating") : (narrow ? "\xE2\x9F\xB3" : "\xE2\x9F\xB3  Rotate");
-    if (ImGui::Button(label, ImVec2(narrow ? h : 0, h))) { autoRotate_ = !autoRotate_; focus_ = pane; }
-    ImGui::PopStyleColor(2);
+    ImGui::PushFont(fonts_.ui, 14.5f);
+    ImDrawList* wdl = ImGui::GetWindowDrawList();
+    const ImU32 dim = theme::col(theme::WHITE, 0.55f), bright = theme::col(theme::WHITE, 0.92f), on = theme::col(theme::BLUE_C);
+
+    // "rotate" toggle
+    const char* label = "rotate";
+    ImVec2 ts = ImGui::CalcTextSize(label);
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    if (ImGui::InvisibleButton("##toggle", ImVec2(ts.x, ts.y + 6))) { autoRotate_ = !autoRotate_; focus_ = pane; }
+    const bool hov = ImGui::IsItemHovered();
+    wdl->AddText(ImVec2(p0.x, p0.y + 3), autoRotate_ ? on : (hov ? bright : dim), label);
+    if (autoRotate_) wdl->AddLine(ImVec2(p0.x, p0.y + ts.y + 5), ImVec2(p0.x + ts.x, p0.y + ts.y + 5), theme::col(theme::BLUE_C, 0.7f), 1.5f);
     ImGui::SetItemTooltip(autoRotate_ ? "Stop rotating around the z-axis" : "Rotate continuously around the z-axis");
-    if (autoRotate_) {
-        ImGui::SameLine(0, 6);
-        ImGui::SetNextItemWidth(narrow ? 110 : 170);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, off);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, (h - ImGui::GetFontSize()) * 0.5f));
-        if (ImGui::SliderFloat("##spd", &rotateSpeed_, -90.f, 90.f, "%.1f\xC2\xB0/s")) focus_ = pane;
-        ImGui::SetItemTooltip("Rotation speed in degrees per second (negative turns the other way).\n"
-                              "Drag to adjust; Cmd-click to type an exact value; double-click to reset to 10\xC2\xB0/s.");
-        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) rotateSpeed_ = 10.f;
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
-    }
+
+    // divider
+    ImGui::SameLine(0, 10);
+    ImVec2 d0 = ImGui::GetCursorScreenPos();
+    wdl->AddLine(ImVec2(d0.x, d0.y + 3), ImVec2(d0.x, d0.y + ts.y + 4), theme::col(theme::WHITE, 0.3f), 1.f);
+    ImGui::Dummy(ImVec2(1, ts.y + 6));
+
+    // speed, as a borderless drag value
+    ImGui::SameLine(0, 10);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1, 1, 1, 0.06f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1, 1, 1, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(autoRotate_ ? bright : dim));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("-90.0\xC2\xB0/s").x + 6);
+    if (ImGui::DragFloat("##spd", &rotateSpeed_, 0.15f, -90.f, 90.f, "%.1f\xC2\xB0/s")) focus_ = pane;
+    if (ImGui::IsItemActive()) rotateDragPane_ = pane;
+    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) rotateSpeed_ = 10.f;
+    ImGui::SetItemTooltip("Speed around the z-axis: drag sideways to adjust (negative reverses),\n"
+                          "Cmd-click to type a value, double-click to reset to 10\xC2\xB0/s.");
     ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
     ImGui::PopFont();
     ImGui::End();
 }

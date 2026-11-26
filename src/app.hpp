@@ -327,7 +327,8 @@ public:
     void layoutRects(int node, ImVec4 r);
     void handleLayoutInput();
     void drawLayoutChrome(ImDrawList* dl);
-    void drawRotateControl(int pane);  // on-canvas spin button + speed slider for 3D panes
+    void drawRotateControl(int pane);
+    int rotateDragPane_ = -1;  // on-canvas spin button + speed slider for 3D panes
     bool inVisible(ImVec2 p) const { return p.x >= visRect_.x && p.x < visRect_.z && p.y >= visRect_.y && p.y < visRect_.w; }
     void initPane();            // defaults for a freshly created pane
     void applyFit();
