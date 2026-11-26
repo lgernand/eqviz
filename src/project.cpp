@@ -128,6 +128,7 @@ void App::resetForProject() {
         fitZEveryFrame_ = false;
         isNote_ = false;
         noteText_.clear();
+        fractal_ = fracJulia_ = false;
     }
     enterPane(start);
     funcs_.clear();
@@ -411,6 +412,17 @@ bool App::saveProject(const std::string& path) {
         }
         out << "notepane\t" << i << "\t" << esc << "\n";
     }
+    for (int i = 0; i < (int)panes_.size(); ++i) {
+        enterPane(i);
+        if (!fractal_ || isNote_) continue;
+        out << "fractalpane\t" << i << "\t" << (fracJulia_ ? 1 : 0) << "\t" << fracIter_ << "\t" << (fracAutoIter_ ? 1 : 0) << "\t"
+            << fracPalette_ << "\t" << fracDensity_ << "\t" << homeScale_ << "\n";
+    }
+    {
+        char b[96];
+        snprintf(b, sizeof b, "fracc\t%.17g\t%.17g\n", fracC_.real(), fracC_.imag());
+        out << b;
+    }
     enterPane(start);
     enterPane(focus_);
     bool firstVisible = true;
@@ -434,7 +446,7 @@ bool App::loadProject(const std::string& path) {
     std::vector<Param> ps;
     std::vector<int> fnVisible;
     std::vector<std::pair<int, std::string>> labels, notePanes;
-    std::vector<std::vector<std::string>> timelineLines;
+    std::vector<std::vector<std::string>> timelineLines, fractalLines;
     struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; bool rotate = false; float rotSpeed = 10; bool pan = false; float pv[3] = {0.5f, 0, 0}; };
     std::vector<PaneSpec> paneSpecs;
     int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
@@ -458,6 +470,8 @@ bool App::loadProject(const std::string& path) {
         if (f.empty()) continue;
         try {
             if (f[0] == "timeline" || f[0] == "key" || f[0] == "kpane") timelineLines.push_back(f);
+            else if (f[0] == "fractalpane" && f.size() > 7) fractalLines.push_back(f);
+            else if (f[0] == "fracc" && f.size() > 2) fracC_ = cplx(std::stod(f[1]), std::stod(f[2]));
             else if (f[0] == "name" && f.size() > 1) name = f[1];
             else if (f[0] == "note" && f.size() > 1) note = f[1];
             else if (f[0] == "mode" && f.size() > 2) { wantComplex = f[1] == "1"; want3D = f[2] == "1"; }
@@ -582,6 +596,23 @@ bool App::loadProject(const std::string& path) {
         isNote_ = true;
         noteText_ = txt;
     }
+    for (auto& f : fractalLines) {
+        try {
+            const int pi = std::stoi(f[1]);
+            if (pi < 0 || pi >= (int)panes_.size()) continue;
+            enterPane(pi);
+            fractal_ = true;
+            fracJulia_ = f[2] == "1";
+            fracIter_ = std::clamp(std::stoi(f[3]), 10, 20000);
+            fracAutoIter_ = f[4] == "1";
+            fracPalette_ = std::clamp(std::stoi(f[5]), 0, 4);
+            fracDensity_ = std::stof(f[6]);
+            homeScale_ = std::stod(f[7]);
+            gridAnim_ = false;
+            gridT_ = 1;
+        } catch (...) {
+        }
+    }
     focus_ = std::clamp(layoutFocus, 0, (int)panes_.size() - 1);
     computePaneRects();
     enterPane(focus_);
@@ -623,6 +654,8 @@ void App::drawProjectSection() {
         if (ImGui::Selectable("Yang\xE2\x80\x93Mills existence and mass gap")) loadDemoYangMills();
         if (ImGui::Selectable("Navier\xE2\x80\x93Stokes: exact viscous flows")) loadDemoNavierStokes();
         if (ImGui::Selectable("Birch and Swinnerton-Dyer: ranks of elliptic curves")) loadDemoBSD();
+        ImGui::Separator();
+        if (ImGui::Selectable("Fractals: Mandelbrot, Julia, Newton, burning ship")) loadDemoFractals();
         ImGui::Separator();
         ImGui::TextDisabled("Saved in ~/Documents/eqviz");
         std::vector<fs::path> files;

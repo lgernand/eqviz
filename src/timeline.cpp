@@ -69,6 +69,8 @@ Keyframe App::captureKeyframe(double t) {
     for (const Param& p : params_) k.params.push_back({p.name, p.value});
     k.scrollX = scroll_.x;
     k.scrollY = scroll_.y;
+    k.fracCRe = fracC_.real();
+    k.fracCIm = fracC_.imag();
     const int start = cur_;
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
@@ -84,9 +86,11 @@ Keyframe App::captureKeyframe(double t) {
         kp.domainR = domainR_;
         kp.domainCx = domainCx_;
         kp.domainCy = domainCy_;
-        kp.complex = fadeStage_ ? pendingComplex_ : complex_;
+        kp.complex = fadeStage_ == 1 ? pendingComplex_ : complex_;  // stage 1 fades out towards the switch
         kp.deriv = deriv_;
         kp.domainColor = domainColor_;
+        kp.fractal = fractal_;
+        kp.julia = fracJulia_;
         kp.active = active_;
         kp.hidden = hiddenRows_;
         kp.noteScroll = noteScroll_;
@@ -146,6 +150,7 @@ void App::applyTimeline(double t, bool animate) {
             sumShowAll_ = false;
         }
     }
+    fracC_ = cplx(lerp(A.fracCRe, B.fracCRe, u), lerp(A.fracCIm, B.fracCIm, u));
     if (extendWorkspace_) {
         scroll_.x = (float)lerp(A.scrollX, B.scrollX, u);
         scroll_.y = (float)lerp(A.scrollY, B.scrollY, u);
@@ -172,11 +177,12 @@ void App::applyTimeline(double t, bool animate) {
         }
         hiddenRows_ = a.hidden;
         domainColor_ = a.domainColor;
+        if (a.fractal != fractal_ || (a.fractal && a.julia != fracJulia_)) setFractal(a.fractal, a.julia);
         if (a.deriv != deriv_) {
             if (animate) toggleDeriv();
             else { deriv_ = a.deriv; derivCreate_ = 1; morph_ = 1; prev_ = Func{}; }
         }
-        const bool complexNow = fadeStage_ ? pendingComplex_ : complex_;
+        const bool complexNow = fadeStage_ == 1 ? pendingComplex_ : complex_;
         if (a.complex != complexNow) {
             if (animate) toggleComplex();
             else {
@@ -580,8 +586,10 @@ void App::saveTimeline(std::ostream& out) const {
     for (const Keyframe& k : keys_) {
         std::string ps;
         for (auto& [n, v] : k.params) ps += (ps.empty() ? "" : ";") + n + "=" + std::to_string(v);
+        char cbuf[80];
+        snprintf(cbuf, sizeof cbuf, "\t%.17g\t%.17g", k.fracCRe, k.fracCIm);
         out << "key\t" << k.t << "\t" << k.ease << "\t" << k.sumPos << "\t" << k.scrollX << "\t" << k.scrollY << "\t"
-            << (ps.empty() ? "-" : ps) << "\n";
+            << (ps.empty() ? "-" : ps) << cbuf << "\n";
         for (const KeyPane& p : k.panes) {
             std::string hidden;
             for (int id : p.hidden)
@@ -592,7 +600,8 @@ void App::saveTimeline(std::ostream& out) const {
                      p.cx, p.cy, p.scale, p.aspect, p.cam.target.x, p.cam.target.y, p.cam.target.z, p.cam.theta, p.cam.phi,
                      p.cam.dist, p.zScale, p.domainR, p.domainCx, p.domainCy, p.complex, p.threeD, p.deriv, p.domainColor,
                      p.active);
-            out << buf << (hidden.empty() ? "-" : hidden) << "\t" << p.noteScroll << "\n";
+            out << buf << (hidden.empty() ? "-" : hidden) << "\t" << p.noteScroll << "\t" << (p.fractal ? 1 : 0)
+                << (p.julia ? 1 : 0) << "\n";
         }
     }
 }
@@ -618,6 +627,7 @@ void App::loadTimelineLine(const std::vector<std::string>& f, const std::vector<
                     if (eqp != std::string::npos) k.params.push_back({item.substr(0, eqp), std::stof(item.substr(eqp + 1))});
                 }
             }
+            if (f.size() > 8) { k.fracCRe = std::stod(f[7]); k.fracCIm = std::stod(f[8]); }
             keys_.push_back(k);
         } else if (f[0] == "kpane" && f.size() > 18 && !keys_.empty()) {
             KeyPane p;
@@ -639,6 +649,7 @@ void App::loadTimelineLine(const std::vector<std::string>& f, const std::vector<
                 }
             }
             p.noteScroll = std::stof(f[18]);
+            if (f.size() > 19 && f[19].size() >= 2) { p.fractal = f[19][0] == '1'; p.julia = f[19][1] == '1'; }
             keys_.back().panes.push_back(p);
         }
     } catch (...) {

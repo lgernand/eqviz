@@ -97,6 +97,7 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
     else if (o.project == "demo:hodge") loadDemoHodge();
     else if (o.project == "demo:yang-mills") loadDemoYangMills();
     else if (o.project == "demo:bsd") loadDemoBSD();
+    else if (o.project == "demo:fractals") loadDemoFractals();
     else if (!o.project.empty() && loadProject(o.project)) {}
     else {
         setSingleFunction(o.eq.empty() ? kDefaultEq : o.eq.c_str());
@@ -106,6 +107,7 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
 }
 
 void App::shutdown() {
+    cancelFractalJobs();
     gpu::shutdown();
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
@@ -329,6 +331,7 @@ void App::rebuildParams() {
         if (d.plot) { eq::freeVars(d.plot, fv); eq::sumBoundNames(d.plot, intNames); }
     fv.erase("x");
     if (threeD_ && !complex_) fv.erase("y");
+    if (anyFractalPane()) fv.erase("c");  // the iteration constant, not a slider
     std::vector<Param> np;
     for (const auto& name : fv) {
         Param p;
@@ -633,6 +636,9 @@ void App::runScriptedActions() {
         else if (a.rfind("export", 0) == 0) { if (a.size() > 6) exportFps_ = std::atoi(a.c_str() + 6); startExport(); }
         else if (a.rfind("ease", 0) == 0) { if (!keys_.empty()) keys_.back().ease = std::atoi(a.c_str() + 4); }
         else if (a.size() > 1 && a[0] == 'T') { tlShown_ = true; tlT_ = std::atof(a.c_str() + 1); tlScrub_ = true; }
+        else if (a == "frac") setFractal(!fractal_, fracJulia_);
+        else if (a == "julia") setFractal(true, !fracJulia_);
+        else if (a.rfind("fc", 0) == 0) { double re = 0, im = 0; if (std::sscanf(a.c_str() + 2, "%lf;%lf", &re, &im) == 2) fracC_ = cplx(re, im); }
         else if (a == "c") toggleComplex();
         else if (a == "3") toggle3D();
         else if (a == "d") toggleDeriv();
@@ -802,13 +808,24 @@ void App::handleInput(float dt) {
                       m.y >= canvasMin_.y && m.x < canvasMax_.x && m.y < canvasMax_.y;
 
     if (!threeD_) {
+        const bool fractalHere = complex_ && fractal_;
         if (overCanvas && ImGui::IsMouseClicked(0)) {
             float dx = m.x - probeScreen_.x, dy = m.y - probeScreen_.y;
-            if (probeVisible_ && dx * dx + dy * dy < 16 * 16) draggingProbe_ = true;
+            if (fractalHere && fracCVisible_ && std::hypot(m.x - fracCScreen_.x, m.y - fracCScreen_.y) < 14) draggingC_ = true;
+            else if (probeVisible_ && dx * dx + dy * dy < 16 * 16) draggingProbe_ = true;
             else panning_ = true;
         }
-        if (!ImGui::IsMouseDown(0)) draggingProbe_ = panning_ = false;
-        if (draggingProbe_) {
+        if (overCanvas && fractalHere && !fracJulia_ && ImGui::IsMouseDoubleClicked(0)) {  // set the Julia constant here
+            double wx, wy;
+            view_.s2w(m, wx, wy);
+            fracC_ = cplx(wx, wy);
+        }
+        if (!ImGui::IsMouseDown(0)) draggingProbe_ = panning_ = draggingC_ = false;
+        if (draggingC_ && fractalHere) {
+            double wx, wy;
+            view_.s2w(m, wx, wy);
+            fracC_ = cplx(wx, wy);
+        } else if (draggingProbe_) {
             double wx, wy;
             view_.s2w(m, wx, wy);
             probeX_ = (float)wx;
@@ -824,7 +841,8 @@ void App::handleInput(float dt) {
         if (zoomBy != 1) {
             zoomAnchorS_ = m;
             view_.s2w(m, zoomAnchorX_, zoomAnchorY_);
-            targetScale_ = std::clamp(targetScale_ * zoomBy, 1e-6, 1e8);  // ~1e9 units across .. ~1e-5
+            // ~1e9 units across .. ~1e-5 (fractals: down to double precision, ~1e-12 across)
+            targetScale_ = std::clamp(targetScale_ * zoomBy, 1e-6, fractalHere ? 1e15 : 1e8);
             if (plat_.magnify != 0 && io.MouseWheel == 0) {  // pinches track the fingers directly
                 view_.scale = targetScale_;
                 ImVec2 c = view_.center();
@@ -936,6 +954,12 @@ const Example kExamples[] = {
     {"Sum over all integers 1/(z-n)^2 (complex)", "sum(n, -inf, inf, 1/(z - n)^2)", true, false},
     {"Geometric series sum z^k (complex)", "sum(k, 0, n, z^k)", true, false},
     {"Poles landscape (3D complex)", "(z^2 - 1)(z - 2 - i)^2 / (z^2 + 2 + 2i)", true, true},
+    {"Fractal: Mandelbrot set  z^2 + c", "z^2 + c", true, false, -0.6, 0, 250, 1, 1},
+    {"Fractal: Julia set of z^2 + c", "z^2 + c", true, false, 0, 0, 270, 1, 2},
+    {"Fractal: Multibrot  z^3 + c", "z^3 + c", true, false, 0, 0, 270, 1, 1},
+    {"Fractal: Burning ship", "(abs(re(z)) - i abs(im(z)))^2 + c", true, false, -0.45, 0.5, 230, 1, 1},
+    {"Fractal: Newton's method for z^3 = 1", "z - (z^3 - 1)/(3 z^2)", true, false, 0, 0, 220, 1, 2},
+    {"Fractal: exponential map  c e^z", "c exp(z)", true, false, 0.5, 0, 140, 1, 1},
 };
 const int kNumExamples = (int)(sizeof(kExamples) / sizeof(kExamples[0]));
 
@@ -946,6 +970,7 @@ void App::loadExample(int i) {
     if (needComplexSwitch) {
         // switch instantly so the new equation is parsed against the right mode
         complex_ = ex.complex;
+        pendingComplex_ = ex.complex;
         fade_ = 0;
         fadeStage_ = 2;
         prev_ = Func{};
@@ -965,7 +990,12 @@ void App::loadExample(int i) {
     }
     gridStep_ = 0;
     setSingleFunction(ex.eq);
-    if (complex_ && !ex.threeD) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
+    if (ex.fractal > 0) {
+        if (ex.fractal == 2 && std::string(ex.eq) == "z^2 + c") fracC_ = cplx(-0.8, 0.156);
+        homeScale_ = view_.scale;
+        setFractal(true, ex.fractal == 2);
+    }
+    if (complex_ && !ex.threeD && !fractal_) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
     if (ex.threeD != threeD_ && !dimAnimating_) startDim(ex.threeD);
     else if (threeD_) {
         if (ex.scale > 0) {  // re-frame the surface around the example's region

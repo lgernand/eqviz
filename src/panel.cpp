@@ -430,6 +430,16 @@ void App::drawPanel() {
             ImGui::SliderFloat("##py", &probeY_, (float)(domainCy_ - domainR_), (float)(domainCy_ + domainR_), "%.3f");
         }
     } else if (complex_) {
+        {
+            bool fr = fractal_;
+            if (ImGui::Checkbox("Fractal: iterate f", &fr)) setFractal(fr, fracJulia_);
+            ImGui::SetItemTooltip("Apply f over and over, z \xE2\x86\x92 f(z, c), and colour each point by how fast it escapes.\n"
+                                  "Try z^2 + c (Mandelbrot / Julia), z^3 + c, or Newton's method z - (z^3 - 1)/(3z^2).");
+        }
+    }
+    if (!isNote_ && !threeD_ && complex_ && fractal_) {
+        drawFractalSection();
+    } else if (complex_ && !threeD_) {
         labelRow("Transform  t", 110);
         float t = gridT_;
         if (ImGui::SliderFloat("##gt", &t, 0.f, 1.f, "%.2f")) { gridT_ = t; gridAnim_ = false; }
@@ -463,7 +473,7 @@ void App::drawPanel() {
             ImGui::PopFont();
             ImGui::PopStyleColor();
         }
-    } else {
+    } else if (!threeD_ && !complex_) {
         if (deriv_) {
             double x0, x1, yy;
             view_.s2w(canvasMin_, x0, yy);

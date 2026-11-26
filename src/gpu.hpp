@@ -27,6 +27,19 @@ struct DomainColorDraw {
 // if the expression can't be compiled for the GPU; the caller then uses the CPU path.
 bool drawDomainColoring(ImDrawList* dl, const eq::NodeP& f, const std::vector<std::string>& params,
                         const DomainColorDraw& d);
+struct FractalDraw {
+    float cRe = 0, cIm = 0;  // Julia constant
+    int iter = 200;
+    bool julia = false;      // z0 = point (else c = point, z0 = 0)
+    float density = 1;
+    float pal[15] = {};      // five palette stops, RGB 0..1
+    float bg[3] = {};        // colour of points that never escape
+    bool colorSettled = false;  // colour points that settle on a fixed point by where (Newton's method)
+};
+// Escape-time fractal of z <- f(z, c), where f uses x for z and the variable c.
+std::string fractalSource(const eq::NodeP& f, const std::vector<std::string>& params, std::string& why);
+bool drawFractal(ImDrawList* dl, const eq::NodeP& f, const std::vector<std::string>& params, const DomainColorDraw& d,
+                 const FractalDraw& fd, std::string& why);
 bool available();
 void shutdown();
 

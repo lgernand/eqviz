@@ -5,6 +5,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <memory>
 #include <ostream>
 #include <set>
 #include <string>
@@ -270,7 +271,10 @@ using NoteItems = std::vector<NoteItem>;
     X(bool, lockZScale_, false) X(bool, fitZEveryFrame_, false) X(ColumnCache, activeCC_, {}) X(ColumnCache, derivCC_, {})            \
     X(double, lastScale_, 0) X(double, scaleChangeT_, -10) X(bool, zoomingNow_, false)                 \
     X(double, gridVcx_, 0) X(double, gridVcy_, 0) X(double, gridVscale_, 0) X(double, gridVw_, 0)      \
-    X(double, gridVh_, 0) X(uint64_t, gridContentHash_, 0)
+    X(double, gridVh_, 0) X(uint64_t, gridContentHash_, 0)                                              \
+    X(bool, fractal_, false) X(bool, fracJulia_, false) X(int, fracIter_, 200) X(bool, fracAutoIter_, true) \
+    X(int, fracPalette_, 0) X(float, fracDensity_, 1.f) X(std::string, fracStatus_, {})                 \
+    X(uint64_t, fracViewHash_, 0) X(double, fracMoveT_, -10) X(ImVec2, fracCScreen_, {}) X(bool, fracCVisible_, false)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -287,6 +291,7 @@ struct KeyPane {
     float zScale = 1, domainR = 4;
     double domainCx = 0, domainCy = 0;
     bool complex = false, threeD = false, deriv = false, domainColor = false;
+    bool fractal = false, julia = false;
     int active = 0;
     std::set<int> hidden;  // row ids (row indices in project files)
     float noteScroll = 0;
@@ -297,6 +302,7 @@ struct Keyframe {
     std::vector<std::pair<std::string, float>> params;
     double sumPos = -1;
     float scrollX = 0, scrollY = 0;
+    double fracCRe = -0.8, fracCIm = 0.156;  // Julia constant
     std::vector<KeyPane> panes;
 };
 
@@ -304,6 +310,7 @@ struct Keyframe {
 
 struct DemoRow;
 struct DemoParam;
+struct FracJob;
 struct DemoPane;
 
 class App {
@@ -444,6 +451,7 @@ public:
     void loadDemoHodge();
     void loadDemoYangMills();
     void loadDemoBSD();
+    void loadDemoFractals();
     bool saveProject(const std::string& path);
     bool loadProject(const std::string& path);
     std::string projectDir() const;
@@ -524,6 +532,19 @@ public:
     bool canHover() const;  // mouse over the canvas, not over UI, no button held
     void hoverLabel(ImDrawList* dl, ImVec2 at, const ts::Box& b, ImU32 accent) const;
 
+    // ---- fractals (fractal.cpp): the active row is iterated, z <- f(z, c)
+    cplx fracC_{-0.8, 0.156};      // Julia constant, shared by every Julia-style pane
+    bool draggingC_ = false;
+    std::map<int, std::shared_ptr<FracJob>> fracJobs_;  // background full-resolution renders, by pane
+    void cancelFractalJobs();
+    int fracIterations() const;    // iteration cap for the current pane (grows with zoom when automatic)
+    bool anyFractalPane() const;
+    bool anyJuliaPane(int row = -1) const;  // a Julia-style pane (showing this row, if given)
+    void drawFractal(ImDrawList* dl, float alpha);
+    void drawFractalOverlay(ImDrawList* dl);  // Julia-constant marker and the orbit under the cursor
+    void setFractal(bool on, bool julia);
+    void drawFractalSection();
+
     // ---- 3D (scene3d.cpp)
     void drawScene3D(ImDrawList* dl);
     void fillSurface(int N);
@@ -549,10 +570,11 @@ struct DemoPane {
     float zScale = 0;          // 0 = automatic
     int res = 48;
     bool fitZ = false;         // refit the height scale every frame (for shapes whose size animates)
+    int fractal = 0;           // 1 Mandelbrot-style, 2 Julia-style
 };
 
 namespace demo_notes {
-extern const char *kRiemann, *kPoincare, *kNavierStokes, *kPvsNP, *kHodge, *kYangMills, *kBSD;
+extern const char *kRiemann, *kPoincare, *kNavierStokes, *kPvsNP, *kHodge, *kYangMills, *kBSD, *kFractals;
 }
 
 struct Example {
@@ -561,6 +583,7 @@ struct Example {
     bool complex, threeD;
     double cx = 0, cy = 0, scale = 0;  // 2D view to use (scale 0 = default view)
     double aspect = 1;                 // y stretch for real graphs
+    int fractal = 0;                   // 1 Mandelbrot-style (c = point), 2 Julia-style (z0 = point)
 };
 extern const Example kExamples[];
 extern const int kNumExamples;

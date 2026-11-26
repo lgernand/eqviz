@@ -211,4 +211,49 @@ It is proved when the order of vanishing is 0 or 1 (Coates–Wiles, Gross–Zagi
 - **Right:** their experiment: the log of the product of $N_p/p$ over primes $p <= x$, plotted against $u = ln(ln(x))$, for curves of rank 0, 1, 2 and 3. Higher rank climbs faster; the grey lines have slopes 1, 2 and 3.
 )";
 
+
+const char* kFractals = R"(# Fractals from iteration
+
+Take a map and apply it again and again:
+
+$$z_{n+1} = z_n^2 + c$$
+
+Starting from $z_0 = 0$, the orbit $z_1 = c$, $z_2 = c^2 + c$, ... either stays bounded or runs off to infinity. Once $|z_n| > 2$ it must escape, so a computer can tell which happens.
+
+## The Mandelbrot set
+
+The **Mandelbrot set** is every $c$ whose orbit stays bounded. Points outside are coloured by how quickly they escape, using a smooth count
+
+$$\nu = n + 1 - ln(ln(|z_n|))/ln(2)$$
+
+so the bands blend instead of stepping. The main cardioid holds the $c$ whose orbit settles on a fixed point, the big disc to its left those that settle into a 2-cycle, and every bulb a cycle of its own length.
+
+## Julia sets
+
+Fix $c$ and colour the starting points $z_0$ instead: that is the **Julia set** of $c$. The two pictures are linked:
+
+- the Julia set is connected exactly when $c$ is in the Mandelbrot set
+- for $c$ outside, it shatters into a cloud of dust (a Cantor set)
+- near the boundary of the Mandelbrot set, the Julia set looks like the Mandelbrot set around $c$
+
+Drag the yellow $c$ in the Mandelbrot pane to see this.
+
+## Newton's method
+
+To solve $z^3 = 1$, Newton's method repeats
+
+$$z_{n+1} = z_n - (z_n^3 - 1)/(3 z_n^2)$$
+
+Each start point runs to one of the three cube roots of $1$, coloured by which. The boundaries between the three basins are fractal: wherever two colours meet, the third is there too.
+
+## The burning ship
+
+Taking absolute values of the real and imaginary parts before squaring breaks the symmetry and gives the **burning ship**. Flipping the sign of the imaginary part stands it upright:
+
+$$z_{n+1} = (|re(z_n)| - i |im(z_n)|)^2 + c$$
+
+## Exploring
+
+Zoom anywhere on a boundary: the detail never runs out. The GPU renders in single precision; past a few thousand times magnification eqviz switches to double precision on the CPU, which goes about a trillion times deeper. Iterations grow with the zoom so fine filaments stay sharp.
+)";
 }  // namespace demo_notes

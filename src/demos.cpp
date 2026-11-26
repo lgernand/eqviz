@@ -45,12 +45,14 @@ void App::loadDemo(const char* name, const char* note, const std::vector<DemoRow
         surfRes_ = p.res;
         if (p.zScale > 0) { lockZScale_ = true; zScale_ = p.zScale; }
         fitZEveryFrame_ = p.fitZ;
+        fractal_ = p.fractal > 0;
+        fracJulia_ = p.fractal == 2;
         if (p.fitZ) lockZScale_ = true;
         hiddenRows_.clear();
         if (!p.show.empty())
             for (int r = 0; r < (int)funcs_.size(); ++r)
                 if (std::find(p.show.begin(), p.show.end(), r) == p.show.end()) hiddenRows_.insert(funcs_[r].id);
-        if (complex_ && !p.threeD) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
+        if (complex_ && !p.threeD && !fractal_) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
     }
     focus_ = std::clamp(focus, 0, (int)panes.size() - 1);
     enterPane(focus_);
@@ -170,4 +172,29 @@ void App::loadDemoBSD() {
              },
              1, 1);
     addContextNote(demo_notes::kBSD, 0.72f);
+}
+
+// ------------------------------------------------------------------ fractals
+
+void App::loadDemoFractals() {
+    fracC_ = cplx(-0.7269, 0.1889);
+    loadDemo("Fractals",
+             "Iterating one simple map, z \xE2\x86\x92 z\xC2\xB2 + c. Top left: the Mandelbrot set, every c whose orbit from "
+             "z = 0 stays bounded. Top right: the Julia set for the yellow c. Drag c around the Mandelbrot set and watch "
+             "the Julia set change; it is connected exactly when c is inside. Bottom: Newton's method for z\xC2\xB3 = 1, "
+             "coloured by the root each starting point finds, and the burning ship. Hover any point to see its orbit.",
+             {
+                 {"f(z) = z^2 + c", YELLOW_C, "Quadratic map"},                                    // 0
+                 {"N(z) = z - (z^3 - 1)/(3 z^2)", BLUE_C, "Newton's method for z\xC2\xB3 = 1"},     // 1
+                 {"B(z) = (abs(re(z)) - i abs(im(z)))^2 + c", GOLD_C, "Burning ship"},             // 2
+             },
+             {},
+             {
+                 {0, false, true, ImVec4(-2.3f, 0.9f, -1.25f, 1.25f), {0}, 0, 0, 48, false, 1},
+                 {0, false, true, ImVec4(-1.7f, 1.7f, -1.1f, 1.1f), {0}, 0, 0, 48, false, 2},
+                 {1, false, true, ImVec4(-1.9f, 1.9f, -1.3f, 1.3f), {1}, 0, 0, 48, false, 2},
+                 {2, false, true, ImVec4(-2.1f, 1.3f, -0.8f, 2.0f), {2}, 0, 0, 48, false, 1},
+             },
+             1, 0);
+    addContextNote(demo_notes::kFractals, 0.72f);
 }

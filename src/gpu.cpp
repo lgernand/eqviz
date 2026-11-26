@@ -135,6 +135,7 @@ struct Gen {
     std::string why;
     bool usesZeta = false;
     int nextId = 0;
+    bool cVar = false;  // fractals: `c` is the complex iteration constant
 
     static std::string ident(const std::string& n) {
         std::string s = "v_";
@@ -148,6 +149,7 @@ struct Gen {
     }
     std::string scopeArgs(bool decl) const {
         std::string s = decl ? "vec2 z" : "z";
+        if (cVar) s += decl ? ", vec2 c" : ", c";
         for (auto& b : bound) s += decl ? ", float " + ident(b) : ", " + ident(b);
         return s;
     }
@@ -166,6 +168,7 @@ struct Gen {
                 for (auto it = bound.rbegin(); it != bound.rend(); ++it)
                     if (*it == n->name) return "vec2(" + ident(n->name) + ", 0.0)";
                 if (n->name == "x") return "z";
+                if (cVar && n->name == "c") return "c";
                 for (size_t i = 0; i < params.size(); ++i)
                     if (params[i] == n->name) return "vec2(u_p[" + std::to_string(i) + "], 0.0)";
                 return "vec2(0.0)";
@@ -286,6 +289,61 @@ std::string fragmentSource(const NodeP& f, const std::vector<std::string>& param
     return s;
 }
 
+// Escape-time fractal of the map z <- f(z, c). Colours match fractalColor() on the CPU.
+std::string fractalSource(const NodeP& f, const std::vector<std::string>& params, std::string& why) {
+    Gen g{params, {}, {}, {}};
+    g.cVar = true;
+    const std::string body = g.gen(f);
+    if (!g.why.empty()) { why = g.why; return ""; }
+    std::string s = "#version 150\nuniform float u_p[32];\nuniform float u_sumLimit;\nuniform float u_alpha;\n";
+    s += "uniform vec2 u_fb;\nuniform float u_fbScale;\nuniform vec4 u_view;\nuniform vec2 u_cc;\n";
+    s += "uniform vec2 u_c;\nuniform int u_iter;\nuniform int u_julia;\nuniform float u_density;\n";
+    s += "uniform vec3 u_pal[5];\nuniform vec3 u_bg;\nuniform int u_settle;\nout vec4 fragColor;\n";
+    s += kHelpers;
+    s += g.funcs;
+    s += "vec2 F(vec2 z, vec2 c) { return " + body + "; }\n";
+    s += R"GLSL(
+vec3 palette(float t) {
+    t = fract(t) * 5.0;
+    int i = int(floor(t));
+    float u = t - float(i);
+    vec3 a = u_pal[0], b = u_pal[1];
+    for (int k = 0; k < 5; k++) if (k == i) { a = u_pal[k]; b = u_pal[(k + 1) % 5]; }
+    return mix(a, b, u);
+}
+void main() {
+    vec2 px = vec2(gl_FragCoord.x, u_fb.y - gl_FragCoord.y) / u_fbScale;
+    vec2 p = vec2(u_view.x + (px.x - u_cc.x) / u_view.z, u_view.y - (px.y - u_cc.y) / (u_view.z * u_view.w));
+    vec2 z = u_julia != 0 ? p : vec2(0.0);
+    vec2 c = u_julia != 0 ? u_c : p;
+    vec3 col = u_bg;
+    for (int i = 0; i < 20000; i++) {
+        if (i >= u_iter) break;
+        vec2 prev = z;
+        z = F(z, c);
+        float m = dot(z, z);
+        if (isnan(m) || isinf(m) || m > 65536.0) {
+            float nu = float(i);
+            if (!isnan(m) && !isinf(m)) nu = float(i) + 1.0 - log2(max(1e-9, 0.5 * log2(m) / 8.0));
+            nu = max(nu, 0.0);
+            col = mix(u_bg, palette(sqrt(nu) * 0.18 * u_density), clamp(nu / 8.0, 0.0, 1.0));
+            break;
+        }
+        vec2 d = z - prev;
+        if (dot(d, d) < 1e-10 * max(1.0, m)) {  // settled on a fixed point: colour by where it went
+            if (u_settle == 0) break;
+            float h = atan(z.y, z.x) / (2.0 * PI);
+            float v = 0.22 + 0.6 * exp(-float(i) * 0.1 / u_density);
+            col = hsv2rgb(h - floor(h), 0.5, v);
+            break;
+        }
+    }
+    fragColor = vec4(col, u_alpha);
+}
+)GLSL";
+    return s;
+}
+
 // ------------------------------------------------------------------ GL programs
 
 #if defined(__APPLE__)
@@ -294,6 +352,7 @@ namespace {
 struct Program {
     GLuint id = 0;
     GLint rect, fb, p, sumLimit, alpha, fbScale, view, cc, zw, zn;
+    GLint fc, iter, julia, density, pal, bg, settle;
 };
 std::map<std::string, std::unique_ptr<Program>> g_programs;  // by fragment source
 std::map<std::string, bool> g_failed;
@@ -354,6 +413,13 @@ Program* programFor(const std::string& frag) {
     p->cc = glGetUniformLocation(p->id, "u_cc");
     p->zw = glGetUniformLocation(p->id, "u_zw");
     p->zn = glGetUniformLocation(p->id, "u_zn");
+    p->fc = glGetUniformLocation(p->id, "u_c");
+    p->iter = glGetUniformLocation(p->id, "u_iter");
+    p->julia = glGetUniformLocation(p->id, "u_julia");
+    p->density = glGetUniformLocation(p->id, "u_density");
+    p->pal = glGetUniformLocation(p->id, "u_pal");
+    p->bg = glGetUniformLocation(p->id, "u_bg");
+    p->settle = glGetUniformLocation(p->id, "u_settle");
     if (g_programs.size() > 64) g_programs.clear();  // forget old expressions
     Program* raw = p.get();
     g_programs[frag] = std::move(p);
@@ -363,6 +429,8 @@ Program* programFor(const std::string& frag) {
 struct Payload {
     Program* prog;
     DomainColorDraw d;
+    bool fractal;
+    FractalDraw fd;
 };
 
 void callback(const ImDrawList*, const ImDrawCmd* cmd) {
@@ -398,6 +466,16 @@ void callback(const ImDrawList*, const ImDrawCmd* cmd) {
         glUniform1fv(p->zw, 129, wf);
         glUniform1i(p->zn, d.zetaN);
     }
+    if (pl.fractal) {
+        const FractalDraw& f = pl.fd;
+        glUniform2f(p->fc, f.cRe, f.cIm);
+        glUniform1i(p->iter, f.iter);
+        glUniform1i(p->julia, f.julia ? 1 : 0);
+        glUniform1f(p->density, f.density);
+        glUniform3fv(p->pal, 5, f.pal);
+        glUniform3fv(p->bg, 1, f.bg);
+        glUniform1i(p->settle, f.colorSettled ? 1 : 0);
+    }
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -413,12 +491,31 @@ bool drawDomainColoring(ImDrawList* dl, const NodeP& f, const std::vector<std::s
     if (src.empty()) return false;
     Program* p = programFor(src);
     if (!p) return false;
-    Payload pl{p, d};
+    Payload pl{p, d, false, {}};
     dl->AddCallback(callback, &pl, sizeof pl);
     dl->AddCallback(ImGui::GetPlatformIO().DrawCallback_ResetRenderState, nullptr);
     return true;
 #else
     (void)dl; (void)f; (void)params; (void)d;
+    return false;
+#endif
+}
+
+bool drawFractal(ImDrawList* dl, const NodeP& f, const std::vector<std::string>& params, const DomainColorDraw& d,
+                 const FractalDraw& fd, std::string& why) {
+#if defined(__APPLE__)
+    if (!f) { why = "no function"; return false; }
+    const std::string src = fractalSource(f, params, why);
+    if (src.empty()) return false;
+    Program* p = programFor(src);
+    if (!p) { why = "shader failed to compile"; return false; }
+    Payload pl{p, d, true, fd};
+    dl->AddCallback(callback, &pl, sizeof pl);
+    dl->AddCallback(ImGui::GetPlatformIO().DrawCallback_ResetRenderState, nullptr);
+    return true;
+#else
+    (void)dl; (void)f; (void)params; (void)d; (void)fd;
+    why = "no GPU path on this platform";
     return false;
 #endif
 }

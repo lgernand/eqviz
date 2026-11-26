@@ -87,6 +87,29 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`, and two-argument `mod(a, m)` and `legendre(a, p)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 
+## Fractals
+
+On the complex plane, tick **Fractal: iterate f** and the pane's function becomes a map that is applied over
+and over, z → f(z, c). Use `z` for the iterate and `c` for the constant (in fractal panes `c` is not a slider).
+
+- **Mandelbrot-style** panes colour each point c by how fast the orbit of z₀ = 0 escapes. **Julia-style**
+  panes start the orbit at the point and use a fixed c. That c is shared by every Julia pane: drag the yellow
+  **c** in a Mandelbrot pane showing the same function, or double-click there, and the Julia set follows live.
+- Escaping points use a smooth iteration count, so the colour bands blend. Maps without `c` (Newton's method,
+  `z - (z^3 - 1)/(3 z^2)`) colour each point by the fixed point it settles on.
+- Hover any point to see its orbit traced on the plane, with where it starts and whether it escapes, settles or
+  stays bounded.
+- Rendering runs on the GPU (the expression is compiled to a shader). Past single precision, about a few
+  thousand times magnification, it switches to double precision on the CPU. That path shows a coarse image
+  while you move, and a background thread then refines it to full resolution. You can zoom about 10¹² times
+  in. Iterations grow with the zoom (**Auto**). Palettes are Theme, Fire, Ice, Rainbow and Greyscale, and
+  **Colour bands** sets the band density.
+- Examples: Mandelbrot, Julia, Multibrot z³ + c, burning ship, Newton's method for z³ = 1, and c·eᶻ. The
+  **Fractals** demo project shows Mandelbrot and Julia side by side with a draggable c, plus Newton's
+  method, the burning ship and an explanatory note.
+- The Julia constant and each pane's fractal mode are saved in projects and can be keyframed on the timeline.
+  Moving c between keyframes morphs the Julia set.
+
 ## Timeline & video export
 
 Press `T` (or **Timeline & video export** in the View section) for a strip under the panes.
@@ -182,7 +205,7 @@ and has two or more keyframes).
 --eq "<expr>"  --complex  --3d  --deriv  --domain-color  --rotate  --size WxH
 --frames N --shot out.bmp     render N frames at 60 fps, save the last one, exit
 --sum-pos T                   freeze the summation player at T terms
---project FILE                open a saved project, or demo:riemann / demo:poincare / demo:navier-stokes
+--project FILE                open a saved project, or demo:riemann / demo:poincare / demo:navier-stokes / demo:fractals
 --actions "10:c,90:3,150:d"   scripted toggles at given frames (c, 3, d, p, e<N>)
 --mouse X,Y                   fake cursor position (testing hover readouts)
 ```
@@ -199,6 +222,7 @@ and has two or more keyframes).
 | `src/themes.cpp`, `src/fonts.cpp`, `src/appearance.cpp` | colour themes, font choices, Appearance section and settings |
 | `src/notes.cpp`, `src/demo_notes.cpp` | note panes (markup, layout, editor) and the demos' explanations |
 | `src/timeline.cpp`, `src/video*` | keyframes, playback, timeline strip; MP4 writer (AVFoundation) |
+| `src/fractal.cpp` | fractal mode: escape-time iteration, CPU double-precision renderer, orbits, panel section |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |
 | `src/app.*` | state, animations, input, mode transitions |

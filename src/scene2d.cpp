@@ -56,10 +56,10 @@ ImU32 domainColor(cplx w, float alpha) {
     return hsv(h, s, v, alpha);
 }
 
-static ts::Box imagLabel(double val, float size) {
+static ts::Box imagLabel(double val, float size, int sig = 6) {
     if (val == 1) return ts::ident("i", size);
     if (val == -1) return ts::hcat({ts::text("\xE2\x88\x92", size), ts::ident("i", size)});
-    return ts::hcat({ts::text(ts::fmtNum(val, 6), size), ts::ident("i", size)});
+    return ts::hcat({ts::text(ts::fmtNum(val, sig), size), ts::ident("i", size)});
 }
 
 // ------------------------------------------------------------------ plane
@@ -101,10 +101,15 @@ void App::drawPlane2D(ImDrawList* dl, float la, bool labels) {
     float axisY = std::clamp(o.y, v.cmin.y + 4, v.cmax.y - 28);
     float axisX = std::clamp(o.x, v.cmin.x + 48, v.cmax.x - 6);
     float lastRight = -1e30f;
+    // enough digits to tell neighbouring ticks apart when zoomed in far from the origin
+    auto digits = [](double a, double b, double st) {
+        return std::clamp((int)std::ceil(std::log10(std::max({std::fabs(a), std::fabs(b), st}) / st)) + 1, 6, 15);
+    };
+    const int sigX = digits(x0, x1, step), sigY = digits(y0, y1, stepY);
     for (long j = (long)std::ceil(x0 / step); j <= (long)std::floor(x1 / step); ++j) {
         if (j == 0) continue;
         double val = j * step;
-        ts::Box b = ts::text(ts::fmtNum(val, 6), ls);
+        ts::Box b = ts::text(ts::fmtNum(val, sigX), ls);
         float bx = v.w2s(val, 0).x - b.w * 0.5f;
         if (bx < v.cmin.x + 2 || bx + b.w > v.cmax.x - 2 || bx < lastRight + 10) continue;  // no overlaps
         lastRight = bx + b.w;
@@ -113,7 +118,7 @@ void App::drawPlane2D(ImDrawList* dl, float la, bool labels) {
     for (long j = (long)std::ceil(y0 / stepY); j <= (long)std::floor(y1 / stepY); ++j) {
         if (j == 0) continue;
         double val = j * stepY;
-        ts::Box b = complex_ ? imagLabel(val, ls) : ts::text(ts::fmtNum(val, 6), ls);
+        ts::Box b = complex_ ? imagLabel(val, ls, sigY) : ts::text(ts::fmtNum(val, sigY), ls);
         float by = v.w2s(0, val).y + 6;
         if (by - 14 < v.cmin.y || by > v.cmax.y - 4) continue;
         ts::draw(dl, b, ImVec2(axisX - 9 - b.w, by), lc);
@@ -823,6 +828,13 @@ void App::drawScene2D(ImDrawList* dl) {
     if (view_.scale != lastScale_) { lastScale_ = view_.scale; scaleChangeT_ = time_; }
     zoomingNow_ = time_ - scaleChangeT_ < 0.25;
     const float a = fade_;
+    if (complex_ && fractal_) {
+        probeVisible_ = false;
+        drawFractal(dl, a);
+        drawPlane2D(dl, 0.2f, true);
+        drawFractalOverlay(dl);
+        return;
+    }
     if (complex_ && domainColor_) drawDomainColoring(dl, a);
     drawPlane2D(dl, complex_ ? 0.45f : 1.f, true);
     if (complex_) {
