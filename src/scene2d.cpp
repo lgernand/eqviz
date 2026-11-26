@@ -343,15 +343,15 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
     auto hover = [&] {
         if (!canHover()) return;
         ImVec2 m = ImGui::GetIO().MousePos;
-        struct Cand { const std::vector<std::vector<ImVec2>>* segs; std::function<double(double)> f; int color; };
+        struct Cand { const std::vector<std::vector<ImVec2>>* segs; std::function<double(double)> f; int color; const char* name; };
         std::vector<Cand> cands;
-        if (activeVisible) cands.push_back({&curveSegs_, F, activeColor});
-        cands.push_back({&dsegs, [&](double x) { return realPart(evalF(fx_, x, 0, env)); }, GREEN_C});
+        if (activeVisible) cands.push_back({&curveSegs_, F, activeColor, act ? act->label : ""});
+        cands.push_back({&dsegs, [&](double x) { return realPart(evalF(fx_, x, 0, env)); }, GREEN_C, ""});
         for (size_t i = 0; i < funcs_.size(); ++i) {
             const FuncDef& d = funcs_[i];
             if ((int)i == active_ || !rowVisible(d) || !d.f.ok()) continue;
             const Func* fn = &d.f;
-            cands.push_back({&rowCache_[d.id].segs, [fn, &envFull](double x) { return realPart(evalF(*fn, x, 0, envFull)); }, d.color});
+            cands.push_back({&rowCache_[d.id].segs, [fn, &envFull](double x) { return realPart(evalF(*fn, x, 0, envFull)); }, d.color, d.label});
         }
         float best = 14.f * 14.f;
         int bestC = -1;
@@ -373,8 +373,10 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
         dl->AddCircleFilled(P, 6.f, c);
         dl->AddCircle(P, 6.f, col(BG), 0, 2.f);
         const float s = 19.f;
-        hoverLabel(dl, P, ts::parens(ts::hcat({ts::text(ts::fmtNum(wx, 5), s), ts::text(",", s), ts::space(6),
-                                               ts::text(ts::fmtNum(fy, 5), s)}), s), c);
+        ts::Box coords = ts::parens(ts::hcat({ts::text(ts::fmtNum(wx, 5), s), ts::text(",", s), ts::space(6),
+                                               ts::text(ts::fmtNum(fy, 5), s)}), s);
+        const char* nm = cands[bestC].name;
+        hoverLabel(dl, P, nm && nm[0] ? ts::hcat({ts::text(nm, s), ts::space(8), coords}) : coords, c);
     };
     if (!deriv_ || !fx_.ok()) { hover(); return; }
     const float da = alpha * smooth(derivCreate_);

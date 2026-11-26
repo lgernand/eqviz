@@ -91,6 +91,8 @@ struct Func {
 // One row of a project: "name(params) = body".
 struct FuncDef {
     char input[1024] = "";
+    char label[128] = "";  // optional display name, shown on the graph instead of the formula
+    bool editLabel = false;
     int color = 0xFFFF00;
     int id = -1;           // stable id (pane visibility refers to it)
     // derived by App::rebuildProject

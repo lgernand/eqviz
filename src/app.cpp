@@ -596,6 +596,12 @@ void App::runScriptedActions() {
         else if (a == "aD") addPane(kBelow);
         else if (a == "x") closePane(focus_);
         else if (a == "hide") togglePanel();
+        else if (a.size() > 2 && a[0] == 'N') {  // N<row>;<display name>
+            size_t semi = a.find(';');
+            int row = std::atoi(a.c_str() + 1);
+            if (semi != std::string::npos && row >= 0 && row < (int)funcs_.size())
+                std::strncpy(funcs_[row].label, a.c_str() + semi + 1, sizeof funcs_[row].label - 1);
+        }
         else if (!a.empty() && a[0] == 'P') plat_.magnify += (float)std::atof(a.c_str() + 1);
         else if (!a.empty() && a[0] == 'S') {
             float dx = 0, dy = 0;

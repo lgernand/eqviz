@@ -503,8 +503,16 @@ void App::drawOverlay(ImDrawList* dl) {
         ImU32 c = col(d.color, !isActive && multi ? 0.85f : 1.f);
         if (complex_ && isActive) c = col(WHITE, deriv_ ? 0.55f : 1.f);
         else if (threeD_ && isActive && !complex_ && !multi) c = col(BLUE_C);
-        card([&](float s) { return ts::hcat({ts::ident(d.name, s), argsBox(d, s)}); }, d.body, ren, c,
-             isActive ? (multi ? 26.f : 30.f) : 22.f);
+        const float size = isActive ? (multi ? 26.f : 30.f) : 22.f;
+        if (d.label[0]) {  // a named function shows its name instead of the formula
+            ts::Box b = ts::text(d.label, size);
+            float base = y + 10 + b.asc;
+            dl->AddRectFilled(ImVec2(x - 14, y), ImVec2(x + b.w + 14, base + b.desc + 10), col(BG, 0.9f), 10);
+            ts::draw(dl, b, ImVec2(x, base), c);
+            y = base + b.desc + 10 + 8;
+            continue;
+        }
+        card([&](float s) { return ts::hcat({ts::ident(d.name, s), argsBox(d, s)}); }, d.body, ren, c, size);
     }
 
     const FuncDef* a = activeDef();

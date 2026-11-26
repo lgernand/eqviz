@@ -41,7 +41,9 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   visibility toggle, and all visible rows are drawn together. Name a row (`f(x) = …`,
   `L(u) = …`, `h(a, b) = …`) and any other row can call it: `g(x) = f(x)^2 + f(2x)`. Calls
   are inlined before evaluation, with checks for circular definitions and argument counts.
-  The highlighted row drives the sum player, derivative, 3D and complex views. Projects
+  Each row can also get a display name (the **Aa** button), shown on the graph and in hover
+  readouts instead of the formula. The highlighted row drives the sum player, derivative, 3D
+  and complex views. Projects
   save to and open from `~/Documents/eqviz` (plain text `.eqviz` files).
 - **Multiple coordinate planes**: add panes to the left, right, top or bottom of the focused
   pane, close them, and drag the gaps between panes to resize. Each pane has its own mode

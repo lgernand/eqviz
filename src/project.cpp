@@ -396,6 +396,7 @@ bool App::saveProject(const std::string& path) {
         char hex[16];
         snprintf(hex, sizeof hex, "%06X", d.color & 0xFFFFFF);
         out << "fn\t" << hex << "\t" << (rowVisible(d) ? 1 : 0) << "\t" << ((int)i == active_ ? 1 : 0) << "\t" << d.input << "\n";
+        if (d.label[0]) out << "label\t" << i << "\t" << d.label << "\n";
         (void)firstVisible;
     }
     return (bool)out;
@@ -408,6 +409,7 @@ bool App::loadProject(const std::string& path) {
     std::vector<FuncDef> fs;
     std::vector<Param> ps;
     std::vector<int> fnVisible;
+    std::vector<std::pair<int, std::string>> labels;
     struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; };
     std::vector<PaneSpec> paneSpecs;
     int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
@@ -440,6 +442,8 @@ bool App::loadProject(const std::string& path) {
                 Param p;
                 p.name = f[1]; p.value = std::stof(f[2]); p.min = std::stof(f[3]); p.max = std::stof(f[4]);
                 ps.push_back(p);
+            } else if (f[0] == "label" && f.size() > 2) {
+                labels.push_back({std::stoi(f[1]), f[2]});
             } else if (f[0] == "workspace" && f.size() > 3) {
                 wsExtend = f[1] == "1"; wsw = std::stof(f[2]); wsh = std::stof(f[3]);
             } else if (f[0] == "layoutroot" && f.size() > 1) {
@@ -486,6 +490,8 @@ bool App::loadProject(const std::string& path) {
         layoutN = 1;
     }
     for (auto& d : fs) d.id = nextRowId_++;
+    for (auto& [row, text] : labels)
+        if (row >= 0 && row < (int)fs.size()) std::strncpy(fs[row].label, text.c_str(), sizeof fs[row].label - 1);
     if (threeD_ && !dimAnimating_) startDim(false);
     setPanes(std::max(1, std::min((int)paneSpecs.size(), layoutN ? layoutN : 1)), layoutKind);
     resetForProject();
@@ -618,14 +624,38 @@ void App::drawFunctionList() {
         ImGui::SameLine(0, 6);
 
         if (focusRow_ == (int)i) { ImGui::SetKeyboardFocusHere(); focusRow_ = -1; }
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - fh - 6);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 2 * fh - 12);
         bool enter = ImGui::InputTextWithHint("##in", i == 0 ? "e.g.  sin(x),  z^2,  sum(k,1,n,1/k^2)" : "e.g.  g(x) = f(x)^2 + 1",
                                               d.input, sizeof d.input, ImGuiInputTextFlags_EnterReturnsTrue);
         if (ImGui::IsItemActivated() && !isActive) newActive = (int)i;
         if (enter || ImGui::IsItemDeactivatedAfterEdit()) commit = true;
         ImGui::SameLine(0, 6);
+        const bool named = d.label[0] != 0;
+        if (named || d.editLabel) {
+            ImVec4 a = colv(d.color);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(a.x, a.y, a.z, 1));
+        }
+        if (ImGui::Button("Aa", ImVec2(fh, fh))) d.editLabel = !d.editLabel;
+        if (named || d.editLabel) ImGui::PopStyleColor();
+        ImGui::SetItemTooltip(named ? "Edit this function's display name" : "Give this function a display name");
+        ImGui::SameLine(0, 6);
         if (ImGui::Button("\xC3\x97", ImVec2(fh, fh))) del = (int)i;
         ImGui::SetItemTooltip("Remove");
+        if (d.editLabel || named) {
+            ImGui::Indent(28);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - fh - 6);
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.09f, 0.10f, 0.125f, 1));
+            if (d.editLabel && ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+            ImGui::InputTextWithHint("##label", "Display name (shown instead of the formula)", d.label, sizeof d.label);
+            if (ImGui::IsItemDeactivated()) d.editLabel = false;
+            ImGui::PopStyleColor();
+            if (named) {
+                ImGui::SameLine(0, 6);
+                if (ImGui::Button("\xE2\x86\xBA", ImVec2(fh, fh))) { d.label[0] = 0; d.editLabel = false; }
+                ImGui::SetItemTooltip("Remove the name (show the formula again)");
+            }
+            ImGui::Unindent(28);
+        }
         if (!d.error.empty()) {
             ImGui::Indent(28);
             ImGui::PushStyleColor(ImGuiCol_Text, colv(RED_C));
