@@ -138,54 +138,6 @@ void App::initPane() {
     cam_.s.phi = PI / 2 - 1e-3;
 }
 
-void App::computePaneRects() {
-    ImVec2 ds = ImGui::GetIO().DisplaySize;
-    const float x0 = panelW_, y0 = 0, x1 = ds.x, y1 = ds.y, g = 2;
-    const int n = (int)panes_.size();
-    paneRects_.assign(n, ImVec4(x0, y0, x1, y1));
-    if (n == 2 && layout_ == 2) {  // stacked
-        float ym = (y0 + y1) * 0.5f;
-        paneRects_[0] = ImVec4(x0, y0, x1, ym - g / 2);
-        paneRects_[1] = ImVec4(x0, ym + g / 2, x1, y1);
-    } else if (n == 4) {
-        float xm = (x0 + x1) * 0.5f, ym = (y0 + y1) * 0.5f;
-        paneRects_[0] = ImVec4(x0, y0, xm - g / 2, ym - g / 2);
-        paneRects_[1] = ImVec4(xm + g / 2, y0, x1, ym - g / 2);
-        paneRects_[2] = ImVec4(x0, ym + g / 2, xm - g / 2, y1);
-        paneRects_[3] = ImVec4(xm + g / 2, ym + g / 2, x1, y1);
-    } else if (n > 1) {  // side by side
-        float w = (x1 - x0 - g * (n - 1)) / n;
-        for (int i = 0; i < n; ++i) paneRects_[i] = ImVec4(x0 + i * (w + g), y0, x0 + i * (w + g) + w, y1);
-    }
-}
-
-void App::setPanes(int count, int layout) {
-    count = std::clamp(count, 1, 4);
-    layout_ = layout;
-    const int oldN = (int)panes_.size();
-    if (count < oldN) {
-        enterPane(0);
-        for (int i = count; i < oldN; ++i)
-            if (panes_[i].dcTex_) {
-                GLuint t = panes_[i].dcTex_;
-                glDeleteTextures(1, &t);
-            }
-        panes_.resize(count);
-        focus_ = std::min(focus_, count - 1);
-    } else if (count > oldN) {
-        const int act = active_;
-        panes_.resize(count);
-        for (int i = oldN; i < count; ++i) {
-            enterPane(i);
-            initPane();
-            active_ = act;  // new panes start on the same function, real axes
-        }
-        rebuildProject(true);
-    }
-    computePaneRects();
-    enterPane(focus_);
-}
-
 void App::applyFit() {
     if (!fitPending_) return;
     const float w = canvasMax_.x - canvasMin_.x, h = canvasMax_.y - canvasMin_.y;
@@ -207,9 +159,10 @@ void App::frame(float dt) {
     ImVec2 ds = io.DisplaySize;
     panelW_ = std::min(390.f, std::max(300.f, ds.x * 0.3f));
     computePaneRects();
+    handleLayoutInput();
 
     // clicking a pane focuses it (the panel edits the focused pane)
-    if (!io.WantCaptureMouse && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1)))
+    if (!io.WantCaptureMouse && !layoutBusy_ && inVisible(io.MousePos) && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1)))
         for (int i = 0; i < (int)paneRects_.size(); ++i) {
             const ImVec4& r = paneRects_[i];
             if (io.MousePos.x >= r.x && io.MousePos.x < r.z && io.MousePos.y >= r.y && io.MousePos.y < r.w) focus_ = i;
@@ -247,6 +200,7 @@ void App::frame(float dt) {
 
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
     dl->AddRectFilled(ImVec2(0, 0), ds, theme::col(theme::BG));
+    dl->PushClipRect(ImVec2(visRect_.x, visRect_.y), ImVec2(visRect_.z, visRect_.w), false);
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
         applyFit();
@@ -254,19 +208,18 @@ void App::frame(float dt) {
         if (hasSum_) sumCount_ = computeSumCount();
         updatePaneAnimations(dt);
         handleInput(dt);
+        const bool onScreen = canvasMax_.x > visRect_.x && canvasMin_.x < visRect_.z && canvasMax_.y > visRect_.y &&
+                              canvasMin_.y < visRect_.w;
+        if (!onScreen) continue;
         cam_.update(canvasMin_, canvasMax_);
-        dl->PushClipRect(canvasMin_, canvasMax_, false);
+        dl->PushClipRect(canvasMin_, canvasMax_, true);
         if (threeD_) drawScene3D(dl);
         else drawScene2D(dl);
         drawOverlay(dl);
         dl->PopClipRect();
     }
-    if (panes_.size() > 1) {  // separators and a highlight on the focused pane
-        for (const ImVec4& r : paneRects_)
-            dl->AddRect(ImVec2(r.x, r.y), ImVec2(r.z, r.w), theme::col(theme::WHITE, 0.08f), 0, 1.f);
-        const ImVec4& r = paneRects_[focus_];
-        dl->AddRect(ImVec2(r.x + 1, r.y + 1), ImVec2(r.z - 1, r.w - 1), theme::col(theme::BLUE_C, 0.55f), 0, 2.f);
-    }
+    drawLayoutChrome(dl);
+    dl->PopClipRect();
     enterPane(focus_);
     drawPanel();
 }
@@ -618,6 +571,13 @@ void App::runScriptedActions() {
         else if (a == "d") toggleDeriv();
         else if (a == "p") { sumPos_ = 0; sumShowAll_ = false; sumPlaying_ = true; }
         else if (!a.empty() && a[0] == 'e') loadExample(std::atoi(a.c_str() + 1));
+        else if (a == "aL") addPane(kLeft);
+        else if (a == "aR") addPane(kRight);
+        else if (a == "aU") addPane(kAbove);
+        else if (a == "aD") addPane(kBelow);
+        else if (a == "x") closePane(focus_);
+        else if (a == "W") { extendWorkspace_ = true; wsW_ = 2.f; }
+        else if (!a.empty() && a[0] == 'f') focus_ = std::clamp(std::atoi(a.c_str() + 1), 0, (int)panes_.size() - 1);
         else if (!a.empty() && a[0] == 'Z') {  // Zx;y;scale : jump the view (zoom testing)
             double x = 0, y = 0, sc = 72;
             if (std::sscanf(a.c_str() + 1, "%lf;%lf;%lf", &x, &y, &sc) == 3) {
@@ -630,7 +590,7 @@ void App::runScriptedActions() {
 bool App::canHover() const {
     const ImGuiIO& io = ImGui::GetIO();
     ImVec2 m = io.MousePos;
-    return !io.WantCaptureMouse && !ImGui::IsAnyMouseDown() && !dimAnimating_ && m.x >= canvasMin_.x &&
+    return !io.WantCaptureMouse && !ImGui::IsAnyMouseDown() && !dimAnimating_ && !layoutBusy_ && inVisible(m) && m.x >= canvasMin_.x &&
            m.y >= canvasMin_.y && m.x < canvasMax_.x && m.y < canvasMax_.y;
 }
 
@@ -650,8 +610,8 @@ void App::hoverLabel(ImDrawList* dl, ImVec2 at, const ts::Box& b, ImU32 accent) 
 void App::handleInput(float dt) {
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 m = io.MousePos;
-    bool overCanvas = !io.WantCaptureMouse && m.x >= canvasMin_.x && m.y >= canvasMin_.y && m.x < canvasMax_.x &&
-                      m.y < canvasMax_.y;
+    bool overCanvas = !io.WantCaptureMouse && !layoutBusy_ && inVisible(m) && m.x >= canvasMin_.x &&
+                      m.y >= canvasMin_.y && m.x < canvasMax_.x && m.y < canvasMax_.y;
 
     if (!threeD_) {
         if (overCanvas && ImGui::IsMouseClicked(0)) {

@@ -51,6 +51,7 @@ add_executable(eqviz
   src/scene2d.cpp
   src/scene3d.cpp
   src/project.cpp
+  src/layout.cpp
   src/expr.cpp
   src/typeset.cpp)
 target_link_libraries(eqviz PRIVATE imgui Threads::Threads)

@@ -173,7 +173,8 @@ struct LaunchOptions {
     int width = 1560, height = 940;
     std::string actions;
     std::string project;  // project file to open, or "demo:riemann" / "demo:poincare"
-    float mouseX = -1, mouseY = -1;  // testing: fake cursor position  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
+    float mouseX = -1, mouseY = -1;  // testing: fake cursor position
+    float drag[5] = {-1, 0, 0, 0, 0};  // testing: x0, y0, x1, y1, start frame of a simulated drag  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
 };
 
 // ------------------------------------------------------------------ panes
@@ -264,14 +265,42 @@ public:
     // the current pane's state (see EQVIZ_PANE_FIELDS)
     EQVIZ_PANE_FIELDS(EQVIZ_DECLARE_FIELD)
 
-    // panes
+    // panes, arranged by a binary layout tree (layout.cpp)
+    struct LayoutNode {
+        int pane = -1;         // leaf: pane index; split: -1
+        bool stacked = false;  // split: children above/below (else left/right)
+        float ratio = 0.5f;    // split: share of the first child
+        int a = -1, b = -1;    // split: children (node indices)
+    };
+    struct Splitter {
+        int node;
+        ImVec4 handle, area;  // grab rect, rect of the split node
+        bool stacked;
+    };
+    enum Side { kLeft, kRight, kAbove, kBelow };
     std::vector<PaneState> panes_;
-    int cur_ = 0, focus_ = 0, layout_ = 1;  // layout for two panes: 1 side by side, 2 stacked
+    int cur_ = 0, focus_ = 0, layout_ = 1;
     std::vector<ImVec4> paneRects_;
+    std::vector<LayoutNode> nodes_;
+    int rootNode_ = 0;
+    std::vector<Splitter> splitters_;
+    int dragSplit_ = -1, dragScroll_ = 0;  // dragScroll_: 1 horizontal bar, 2 vertical bar
+    float dragGrab_ = 0;
+    bool layoutBusy_ = false;              // a splitter or scrollbar owns the mouse this frame
+    bool extendWorkspace_ = false;         // panes may extend past the window (scrollbars)
+    float wsW_ = 1.6f, wsH_ = 1.f;         // workspace size in multiples of the visible area
+    ImVec2 scroll_{0, 0};
+    ImVec4 visRect_;                       // visible canvas area (right of the panel)
     void exchange(PaneState& p);
     void enterPane(int i);      // make pane i current (canvas rect included)
-    void setPanes(int count, int layout);
+    void setPanes(int count, int layout);  // default arrangement for count panes
+    void addPane(Side side);    // split the focused pane
+    void closePane(int i);
     void computePaneRects();
+    void layoutRects(int node, ImVec4 r);
+    void handleLayoutInput();
+    void drawLayoutChrome(ImDrawList* dl);
+    bool inVisible(ImVec2 p) const { return p.x >= visRect_.x && p.x < visRect_.z && p.y >= visRect_.y && p.y < visRect_.w; }
     void initPane();            // defaults for a freshly created pane
     void applyFit();
     bool rowVisible(const FuncDef& d) const { return !hiddenRows_.count(d.id); }

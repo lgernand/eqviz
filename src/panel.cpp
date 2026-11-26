@@ -177,29 +177,43 @@ void App::drawPanel() {
     // ---- view toggles
     sectionHeader(panes_.size() > 1 ? "VIEW  \xC2\xB7  FOCUSED PANE" : "VIEW", fonts_.uiBold);
     {
-        // pane layout: 1, 2 side by side, 2 stacked, 2 x 2
-        const char* labels[] = {"1 pane", "2 \xE2\x96\xAF\xE2\x96\xAF", "2 \xE2\x96\xAD", "4"};
-        const int counts[] = {1, 2, 2, 4}, kinds[] = {1, 1, 2, 1};
-        float bw = (ImGui::GetContentRegionAvail().x - 3 * 6) / 4;
+        // panes: add next to the focused one, close it, let the workspace grow past the window
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Add pane");
+        ImGui::SameLine(84);
+        const char* labels[] = {"\xE2\x86\x90", "\xE2\x86\x92", "\xE2\x86\x91", "\xE2\x86\x93"};
+        const char* tips[] = {"Add a pane to the left of this one", "Add a pane to the right of this one",
+                              "Add a pane above this one", "Add a pane below this one"};
+        const Side sides[] = {kLeft, kRight, kAbove, kBelow};
+        float avail = ImGui::GetContentRegionAvail().x;
+        float bw = (avail - 3 * 6 - (panes_.size() > 1 ? 70 + 6 : 0)) / 4;
         for (int k = 0; k < 4; ++k) {
             if (k) ImGui::SameLine(0, 6);
-            bool sel = (int)panes_.size() == counts[k] && (counts[k] != 2 || layout_ == kinds[k]);
-            if (sel) {
-                ImVec4 a = colv(BLUE_C);
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(a.x * 0.42f, a.y * 0.42f, a.z * 0.42f, 1));
-            }
-            if (ImGui::Button(labels[k], ImVec2(bw, 30)) && !sel) setPanes(counts[k], kinds[k]);
-            if (sel) ImGui::PopStyleColor();
-            ImGui::SetItemTooltip(k == 0 ? "One coordinate plane" : k == 1 ? "Two planes side by side"
-                                  : k == 2 ? "Two planes stacked" : "Four planes");
+            ImGui::PushID(k);
+            if (ImGui::Button(labels[k], ImVec2(bw, 0))) addPane(sides[k]);
+            ImGui::SetItemTooltip("%s", tips[k]);
+            ImGui::PopID();
         }
         if (panes_.size() > 1) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-            ImGui::PushFont(nullptr, 12.5f);
-            ImGui::Text("Editing pane %d of %d (outlined). Click a pane to edit it.", focus_ + 1, (int)panes_.size());
-            ImGui::PopFont();
-            ImGui::PopStyleColor();
+            ImGui::SameLine(0, 6);
+            if (ImGui::Button("Close", ImVec2(70, 0))) closePane(focus_);
+            ImGui::SetItemTooltip("Close this pane");
         }
+        ImGui::Checkbox("Let panes extend past the window", &extendWorkspace_);
+        if (extendWorkspace_) {
+            float half = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
+            ImGui::SetNextItemWidth(half);
+            ImGui::SliderFloat("##wsw", &wsW_, 1.f, 5.f, "width %.1f\xC3\x97");
+            ImGui::SameLine(0, 6);
+            ImGui::SetNextItemWidth(half);
+            ImGui::SliderFloat("##wsh", &wsH_, 1.f, 5.f, "height %.1f\xC3\x97");
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::PushFont(nullptr, 12.5f);
+        ImGui::TextWrapped("%s%s", panes_.size() > 1 ? "Click a pane to edit it; drag the gaps between panes to resize. " : "",
+                           extendWorkspace_ ? "Scroll with the scrollbars, a sideways swipe, or Option + scroll." : "");
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
     }
     if (segmented("Real axes", "Complex plane", fadeStage_ ? pendingComplex_ : complex_, BLUE_C)) toggleComplex();
     bool showing3D = dimAnimating_ ? dimTo3D_ : threeD_;

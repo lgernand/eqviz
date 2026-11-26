@@ -304,6 +304,10 @@ bool App::saveProject(const std::string& path) {
     for (auto& p : params_)
         out << "param\t" << p.name << "\t" << p.value << "\t" << p.min << "\t" << p.max << "\n";
     out << "layout\t" << panes_.size() << "\t" << layout_ << "\t" << focus_ << "\n";
+    out << "workspace\t" << (extendWorkspace_ ? 1 : 0) << "\t" << wsW_ << "\t" << wsH_ << "\n";
+    out << "layoutroot\t" << rootNode_ << "\n";
+    for (const LayoutNode& nd : nodes_)
+        out << "layoutnode\t" << nd.pane << "\t" << (nd.stacked ? 1 : 0) << "\t" << nd.ratio << "\t" << nd.a << "\t" << nd.b << "\n";
     const int start = cur_;
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
@@ -335,7 +339,10 @@ bool App::loadProject(const std::string& path) {
     std::vector<int> fnVisible;
     struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; };
     std::vector<PaneSpec> paneSpecs;
-    int layoutN = 0, layoutKind = 1, layoutFocus = 0;
+    int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
+    std::vector<LayoutNode> tree;
+    bool wsExtend = false;
+    float wsw = 1.6f, wsh = 1.f;
     int act = 0;
     bool wantComplex = false, want3D = false;
     std::string name = fs::path(path).stem().string(), note;
@@ -362,6 +369,15 @@ bool App::loadProject(const std::string& path) {
                 Param p;
                 p.name = f[1]; p.value = std::stof(f[2]); p.min = std::stof(f[3]); p.max = std::stof(f[4]);
                 ps.push_back(p);
+            } else if (f[0] == "workspace" && f.size() > 3) {
+                wsExtend = f[1] == "1"; wsw = std::stof(f[2]); wsh = std::stof(f[3]);
+            } else if (f[0] == "layoutroot" && f.size() > 1) {
+                treeRoot = std::stoi(f[1]);
+            } else if (f[0] == "layoutnode" && f.size() > 5) {
+                LayoutNode nd;
+                nd.pane = std::stoi(f[1]); nd.stacked = f[2] == "1"; nd.ratio = std::stof(f[3]);
+                nd.a = std::stoi(f[4]); nd.b = std::stoi(f[5]);
+                tree.push_back(nd);
             } else if (f[0] == "layout" && f.size() > 3) {
                 layoutN = std::stoi(f[1]); layoutKind = std::stoi(f[2]); layoutFocus = std::stoi(f[3]);
             } else if (f[0] == "pane" && f.size() > 8) {
@@ -421,7 +437,22 @@ bool App::loadProject(const std::string& path) {
         want3D_ = p.threeD && !threeD_;
         if (complex_ && !p.threeD) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
     }
+    extendWorkspace_ = wsExtend;
+    wsW_ = wsw;
+    wsH_ = wsh;
+    {   // restore the saved arrangement if it is consistent with the panes
+        bool ok = treeRoot >= 0 && treeRoot < (int)tree.size();
+        std::vector<int> seen(panes_.size(), 0);
+        for (const LayoutNode& nd : tree) {
+            if (nd.pane >= (int)panes_.size()) ok = false;
+            else if (nd.pane >= 0) seen[nd.pane]++;
+            if (nd.pane == -1 && (nd.a < 0 || nd.b < 0 || nd.a >= (int)tree.size() || nd.b >= (int)tree.size())) ok = false;
+        }
+        for (int c : seen) ok = ok && c == 1;
+        if (ok) { nodes_ = tree; rootNode_ = treeRoot; }
+    }
     focus_ = std::clamp(layoutFocus, 0, (int)panes_.size() - 1);
+    computePaneRects();
     enterPane(focus_);
     rebuildProject(true);
     return true;

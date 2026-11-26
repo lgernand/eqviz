@@ -43,9 +43,11 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   are inlined before evaluation, with checks for circular definitions and argument counts.
   The highlighted row drives the sum player, derivative, 3D and complex views. Projects
   save to and open from `~/Documents/eqviz` (plain text `.eqviz` files).
-- **Multiple coordinate planes**: show 1, 2 (side by side or stacked) or 4 panes. Each pane
-  has its own mode (real or complex, 2D or 3D), view, main function, and visible rows. Click a
-  pane to focus it; the panel then edits that pane. Rows are shared by every pane.
+- **Multiple coordinate planes**: add panes to the left, right, top or bottom of the focused
+  pane, close them, and drag the gaps between panes to resize. Each pane has its own mode
+  (real or complex, 2D or 3D), view, main function and visible rows; click a pane to edit it.
+  Optionally the workspace can be larger than the window (up to 5× each way), with scrollbars,
+  a sideways swipe, or Option + scroll to move around.
 - **Riemann Hypothesis demo** (Project, then Open): on the left, ζ(z) transforming the
   complex plane; on the right, the prime staircase π₀(x), Riemann's
   smooth R(x), |ζ(½ + ix)| touching zero at each γₖ, and the explicit-formula curve
