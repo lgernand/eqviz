@@ -234,7 +234,7 @@ using CplxVec = std::vector<cplx>;
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
     X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
     X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)               \
-    X(bool, lockZScale_, false) X(ColumnCache, activeCC_, {}) X(ColumnCache, derivCC_, {})            \
+    X(bool, lockZScale_, false) X(bool, fitZEveryFrame_, false) X(ColumnCache, activeCC_, {}) X(ColumnCache, derivCC_, {})            \
     X(double, lastScale_, 0) X(double, scaleChangeT_, -10) X(bool, zoomingNow_, false)                 \
     X(double, gridVcx_, 0) X(double, gridVcy_, 0) X(double, gridVscale_, 0) X(double, gridVw_, 0)      \
     X(double, gridVh_, 0) X(uint64_t, gridContentHash_, 0)
@@ -433,6 +433,7 @@ struct DemoPane {
     int colorMode = 0;
     float zScale = 0;          // 0 = automatic
     int res = 48;
+    bool fitZ = false;         // refit the height scale every frame (for shapes whose size animates)
 };
 
 struct Example {

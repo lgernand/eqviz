@@ -372,7 +372,8 @@ void App::drawPanel() {
         ImGui::SameLine(0, 6);
         if (ImGui::Button("Auto", ImVec2(bwA, 0))) autoZScale();
         labelRow("Resolution", 110);
-        ImGui::SliderInt("##res", &surfRes_, 8, 120);
+        ImGui::SliderInt("##res", &surfRes_, 8, 400);
+        ImGui::SetItemTooltip("Mesh resolution per side. Above ~200 the surface may get slow while moving the camera.");
         labelRow("Opacity", 110);
         ImGui::SliderFloat("##op", &surfOpacity_, 0.1f, 1.f, "%.2f");
         if (!complex_) {

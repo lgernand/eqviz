@@ -603,6 +603,7 @@ void App::runScriptedActions() {
         else if (a == "aD") addPane(kBelow);
         else if (a == "x") closePane(focus_);
         else if (a == "hide") togglePanel();
+        else if (a.rfind("res", 0) == 0) surfRes_ = std::atoi(a.c_str() + 3);
         else if (a.size() > 2 && a[0] == 'N') {  // N<row>;<display name>
             size_t semi = a.find(';');
             int row = std::atoi(a.c_str() + 1);

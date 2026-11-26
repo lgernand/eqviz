@@ -44,6 +44,8 @@ void App::loadDemo(const char* name, const char* note, const std::vector<DemoRow
         colorMode_ = p.colorMode;
         surfRes_ = p.res;
         if (p.zScale > 0) { lockZScale_ = true; zScale_ = p.zScale; }
+        fitZEveryFrame_ = p.fitZ;
+        if (p.fitZ) lockZScale_ = true;
         hiddenRows_.clear();
         if (!p.show.empty())
             for (int r = 0; r < (int)funcs_.size(); ++r)
@@ -115,7 +117,9 @@ void App::loadDemoYangMills() {
              "gap \xCE\x94 > 0: the lightest particle is massive even though the classical field has massless waves. "
              "A mass gap is why the strong force is short-ranged and quarks are confined. Shown: a long-range 1/r "
              "force against a short-range Yukawa force, the energy gap in E = \xE2\x88\x9A(p\xC2\xB2 + m\xC2\xB2), "
-             "the linearly rising potential that confines quarks, and the action density of an instanton.",
+             "the linearly rising potential that confines quarks, and the action density of an instanton "
+             "(its peak 6/\xCF\x81\xE2\x81\xB4 grows 256-fold as the size \xCF\x81 shrinks, so that pane rescales "
+             "its height continuously; hover for the true values).",
              {
                  {"C(r) = -1/r", GREY, "Massless force (Coulomb): reaches far"},                              // 0
                  {"Y(r) = -e^(-m r)/r", BLUE_C, "With a mass gap m (Yukawa): dies off like e^(-mr)"},          // 1
@@ -129,7 +133,7 @@ void App::loadDemoYangMills() {
                  {1, false, false, ImVec4(-0.2f, 5.f, -3.f, 0.6f), {0, 1}},
                  {2, false, false, ImVec4(-3.f, 3.f, -0.5f, 3.5f), {2, 3}},
                  {4, false, false, ImVec4(-0.2f, 6.f, -2.f, 2.f), {4}},
-                 {5, true, false, ImVec4(-3.f, 3.f, -3.f, 3.f), {}, 1, 0.12f, 70},
+                 {5, true, false, ImVec4(-3.f, 3.f, -3.f, 3.f), {}, 1, 0.f, 140, true},
              },
              1, 0);
 }

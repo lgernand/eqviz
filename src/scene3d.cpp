@@ -211,7 +211,7 @@ void App::drawScene3D(ImDrawList* dl) {
     }
 
     // ---- surface
-    const int N = std::clamp(surfRes_, 8, 120);
+    const int N = std::clamp(surfRes_, 8, 400);
     {
         Hasher hh;
         hh.u(evalHash());
@@ -223,6 +223,14 @@ void App::drawScene3D(ImDrawList* dl) {
         }
     }
     const std::vector<cplx>& vals = surfVals_;
+    if (fitZEveryFrame_ && !complex_) {  // keep the tallest point at a fixed height
+        double m = 0;
+        for (const cplx& w : vals) {
+            double v = realPart(w);
+            if (std::isfinite(v)) m = std::max(m, std::fabs(v));
+        }
+        if (m > 1e-12) zScale_ = (float)(1.1 * R / m);
+    }
     const double zMax = 2.2 * R;
     std::vector<Vec3> P(vals.size());
     std::vector<char> okv(vals.size());
@@ -237,8 +245,9 @@ void App::drawScene3D(ImDrawList* dl) {
                 h = std::min(std::isfinite(m) ? m * zScale_ : zMax, zMax);
             } else {
                 double v = realPart(vals[k]);
-                okv[k] = std::isfinite(v) && std::fabs(v * zScale_) < 4 * R;
-                h = okv[k] ? v * zScale_ : 0;
+                okv[k] = std::isfinite(v);
+                // overshooting values are flattened at the cut-off rather than dropped (which left holes)
+                h = okv[k] ? std::clamp(v * zScale_, -4 * R, 4 * R) : 0;
             }
             if (okv[k]) { zmin = std::min(zmin, h); zmax = std::max(zmax, h); }
             P[k] = Vec3(x, y, h * hs);
@@ -262,28 +271,54 @@ void App::drawScene3D(ImDrawList* dl) {
         Vec3 L = normalize(cam_.up * 0.9 - cam_.fwd * 0.6 - cam_.right * 0.35);
         ImU32 strokeC = col(LIGHT_GREY, 0.22f * sa);
         float strokeW = N > 70 ? 0.f : 0.7f;
-        for (int i = 0; i < N; ++i)
+        const size_t NV = P.size();
+        // per-vertex work done once (each vertex is shared by four quads)
+        std::vector<ImVec2> sp(NV);
+        std::vector<float> dep(NV);
+        std::vector<char> vis(NV);
+        std::vector<ImU32> base;
+        const bool perVertex = complex_ || colorMode_ == 1;
+        if (perVertex) base.resize(NV);
+        parallelFor(N + 1, [&](int i) {
+            for (int j = 0; j <= N; ++j) {
+                size_t k = (size_t)i * (N + 1) + j;
+                vis[k] = okv[k] && cam_.project(P[k], sp[k], dep[k]);
+                if (perVertex && okv[k])
+                    base[k] = complex_ ? domainColor(vals[k], sa)
+                                       : heightColor((float)((P[k].z / std::max(1e-6f, hs) - zmin) / std::max(1e-9, zmax - zmin)), sa);
+            }
+        });
+        // build the quads in parallel, one row of quads per task
+        std::vector<std::vector<Prim3>> rows(N);
+        parallelFor(N, [&](int i) {
+            std::vector<Prim3>& out = rows[i];
+            out.reserve(N);
             for (int j = 0; j < N; ++j) {
                 size_t k00 = (size_t)i * (N + 1) + j, k10 = k00 + (N + 1), k11 = k10 + 1, k01 = k00 + 1;
-                if (!okv[k00] || !okv[k10] || !okv[k11] || !okv[k01]) continue;
-                Vec3 q[4] = {P[k00], P[k10], P[k11], P[k01]};
-                Vec3 n = normalize(cross(q[2] - q[0], q[3] - q[1]));
-                float lam = (float)std::fabs(dot(n, L));
-                float sh = 0.42f + 0.58f * lam;
-                if (complex_ || colorMode_ == 1) {
-                    const size_t ks[4] = {k00, k10, k11, k01};
-                    ImU32 vc[4];
-                    for (int c = 0; c < 4; ++c) {
-                        ImU32 base = complex_ ? domainColor(vals[ks[c]], sa)
-                                              : heightColor((float)((P[ks[c]].z / std::max(1e-6f, hs) - zmin) /
-                                                                    std::max(1e-9, zmax - zmin)), sa);
-                        vc[c] = shade(base, sh);
-                    }
-                    B.quadG(q, vc, complex_ ? col(BG, 0.12f * sa) : strokeC, strokeW);
+                if (!vis[k00] || !vis[k10] || !vis[k11] || !vis[k01]) continue;
+                Vec3 n = normalize(cross(P[k11] - P[k00], P[k01] - P[k10]));
+                float sh = 0.42f + 0.58f * (float)std::fabs(dot(n, L));
+                Prim3 pr;
+                pr.p[0] = sp[k00]; pr.p[1] = sp[k10]; pr.p[2] = sp[k11]; pr.p[3] = sp[k01];
+                pr.depth = 0.25f * (dep[k00] + dep[k10] + dep[k11] + dep[k01]);
+                pr.thick = strokeW;
+                if (perVertex) {
+                    pr.kind = Prim3::QuadG;
+                    pr.vc[0] = shade(base[k00], sh); pr.vc[1] = shade(base[k10], sh);
+                    pr.vc[2] = shade(base[k11], sh); pr.vc[3] = shade(base[k01], sh);
+                    pr.stroke = complex_ ? col(BG, 0.12f * sa) : strokeC;
                 } else {
-                    B.quad(q, shade(col(((i + j) & 1) ? BLUE_D : BLUE_E, sa), sh), strokeC, strokeW);
+                    pr.kind = Prim3::Quad;
+                    pr.fill = shade(col(((i + j) & 1) ? BLUE_D : BLUE_E, sa), sh);
+                    pr.stroke = strokeC;
                 }
+                out.push_back(pr);
             }
+        });
+        size_t total = prims.size();
+        for (auto& r : rows) total += r.size();
+        prims.reserve(total);
+        for (auto& r : rows) prims.insert(prims.end(), r.begin(), r.end());
     }
 
     // ---- axes (through the origin, or along the domain edge nearest to it)
@@ -331,11 +366,14 @@ void App::drawScene3D(ImDrawList* dl) {
         }
     }
 
-    // ---- painter's algorithm
-    std::sort(prims.begin(), prims.end(), [](const Prim3& a, const Prim3& b) { return a.depth > b.depth; });
+    // ---- painter's algorithm: sort compact (depth, index) keys rather than whole primitives
+    std::vector<std::pair<float, uint32_t>> order(prims.size());
+    for (size_t i = 0; i < prims.size(); ++i) order[i] = {-prims[i].depth, (uint32_t)i};
+    std::sort(order.begin(), order.end());
     ImDrawListFlags saved = dl->Flags;
     dl->Flags &= ~ImDrawListFlags_AntiAliasedFill;  // MSAA smooths quad edges without seams
-    for (const Prim3& p : prims) {
+    for (const auto& o : order) {
+        const Prim3& p = prims[o.second];
         switch (p.kind) {
             case Prim3::Quad:
                 dl->AddConvexPolyFilled(p.p, 4, p.fill);

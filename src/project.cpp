@@ -122,6 +122,7 @@ void App::resetForProject() {
         rowCache_.clear();
         gridStep_ = 0;
         lockZScale_ = false;
+        fitZEveryFrame_ = false;
     }
     enterPane(start);
     funcs_.clear();
