@@ -421,7 +421,8 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
 // ------------------------------------------------------------------ complex grid
 
 template <class WF>
-static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<std::vector<cplx>>& out) {
+static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<std::vector<cplx>>& out,
+                    std::vector<std::vector<cplx>>& outZ) {
     const float Wd = v.cmax.x - v.cmin.x, H = v.cmax.y - v.cmin.y;
     // subdivide a margin of half a pane beyond the edges so reused lines stay smooth after a pan
     const float L = v.cmin.x - 0.6f * Wd, R = v.cmax.x + 0.6f * Wd, T = v.cmin.y - 0.6f * H, B = v.cmax.y + 0.6f * H;
@@ -429,10 +430,11 @@ static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<st
     const int maxDepth = 14;  // off-screen pieces are never subdivided, so depth is cheap
     float lenPx = (float)(std::abs(b - a) * v.scale);
     int baseN = std::clamp((int)(lenPx / 10), 24, 400);
-    std::vector<cplx> cur;
+    std::vector<cplx> cur, curZ;  // warped points and the input points they came from
     auto flush = [&] {
-        if (cur.size() >= 2) out.push_back(cur);
+        if (cur.size() >= 2) { out.push_back(cur); outZ.push_back(curZ); }
         cur.clear();
+        curZ.clear();
     };
     auto ok = [](cplx w) { return finiteC(w) && std::fabs(w.real()) < 1e8 && std::fabs(w.imag()) < 1e8; };
     auto S = [&](cplx w) { return v.w2s(w.real(), w.imag()); };
@@ -451,9 +453,10 @@ static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<st
                 seg(zm, wm, z1, w1, d + 1);
                 return;
             }
-            if (dist > jumpD && !off) { flush(); cur.push_back(w1); return; }
-            if (cur.empty()) cur.push_back(w0);
+            if (dist > jumpD && !off) { flush(); cur.push_back(w1); curZ.push_back(z1); return; }
+            if (cur.empty()) { cur.push_back(w0); curZ.push_back(z0); }
             cur.push_back(w1);
+            curZ.push_back(z1);
             return;
         }
         if ((f0 || f1) && d < maxDepth - 2) {
@@ -463,10 +466,10 @@ static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<st
             return;
         }
         flush();
-        if (f1) cur.push_back(w1);
+        if (f1) { cur.push_back(w1); curZ.push_back(z1); }
     };
     cplx zp = a, wp = W(a);
-    if (ok(wp)) cur.push_back(wp);
+    if (ok(wp)) { cur.push_back(wp); curZ.push_back(a); }
     for (int i = 1; i <= baseN; ++i) {
         cplx z = a + (b - a) * ((double)i / baseN), w = W(z);
         seg(zp, wp, z, w, 0);
@@ -510,6 +513,7 @@ void App::warpedGrid() {
     gridHash_ = hh.h | 1;
     gridVcx_ = v.cx; gridVcy_ = v.cy; gridVscale_ = v.scale; gridVw_ = vw; gridVh_ = vh;
     auto& out = gridLines_;
+    auto& outZ = gridInputs_;
     auto& kinds = gridKinds_;
     const double x0 = gridX0_, x1 = gridX1_, y0 = gridY0_, y1 = gridY1_;
     double sp = gridStep_;
@@ -534,10 +538,11 @@ void App::warpedGrid() {
         return (1.0 - t) * z + t * w;
     };
     out.assign(ls.size(), {});
+    outZ.assign(ls.size(), {});
     kinds.assign(ls.size(), 0);
     parallelFor((int)ls.size(), [&](int i) {
         kinds[i] = ls[i].kind;
-        mapLine(W, ls[i].a, ls[i].b, v, out[i]);
+        mapLine(W, ls[i].a, ls[i].b, v, out[i], outZ[i]);
     });
 }
 
@@ -566,11 +571,71 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
 
     if (!canHover()) return;
     ImVec2 m = ImGui::GetIO().MousePos;
+    EvalEnv env = makeEnv();
+    const Func& cur = displayFunc();
+    const float s = 19.f;
+
+    // Snap to the nearest transformed grid line (like curves on real axes): find the closest
+    // point on any warped polyline, interpolating both the warped point and its input z.
+    {
+        float best = 14.f * 14.f;
+        int bestLine = -1;
+        cplx bestZ, bestW;
+        ImVec2 bestS;
+        for (size_t li = 0; li < gridLines_.size() && li < gridInputs_.size(); ++li) {
+            for (size_t pi = 0; pi < gridLines_[li].size() && pi < gridInputs_[li].size(); ++pi) {
+                const auto& W = gridLines_[li][pi];
+                const auto& Z = gridInputs_[li][pi];
+                for (size_t k = 1; k < W.size() && k < Z.size(); ++k) {
+                    ImVec2 a = view_.w2s(W[k - 1].real(), W[k - 1].imag()), b = view_.w2s(W[k].real(), W[k].imag());
+                    float dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+                    float t = len2 > 0 ? std::clamp(((m.x - a.x) * dx + (m.y - a.y) * dy) / len2, 0.f, 1.f) : 0.f;
+                    ImVec2 q(a.x + dx * t, a.y + dy * t);
+                    float d = (q.x - m.x) * (q.x - m.x) + (q.y - m.y) * (q.y - m.y);
+                    if (d < best) {
+                        best = d;
+                        bestLine = (int)li;
+                        bestS = q;
+                        bestW = W[k - 1] + (W[k] - W[k - 1]) * (double)t;
+                        bestZ = Z[k - 1] + (Z[k] - Z[k - 1]) * (double)t;
+                    }
+                }
+            }
+        }
+        if (bestLine >= 0) {
+            const int kind = gridKinds_[bestLine];
+            const int lineCol = kind == 2 ? YELLOW_C : kind == 3 ? RED_C : BLUE_C;
+            cplx fz = evalF(cur, bestZ, 0, env);
+            ImVec2 Zs = view_.w2s(bestZ.real(), bestZ.imag());
+            if (gridT_ > 0.02f && std::fabs(Zs.x) < 1e5f && std::fabs(Zs.y) < 1e5f) {  // back to where it started
+                dashedLine(dl, bestS, Zs, col(WHITE, 0.45f), 1.2f);
+                dl->AddCircle(Zs, 4.5f, col(WHITE, 0.8f), 0, 1.6f);
+            }
+            dl->AddCircleFilled(bestS, 6.f, col(lineCol));
+            dl->AddCircle(bestS, 6.f, col(BG), 0, 2.f);
+            ts::Box fl = (complex_ && deriv_) ? ts::hcat({ts::ident("f", s), ts::text("\xE2\x80\xB2", s)}) : ts::ident("f", s);
+            ts::Box l1 = ts::hcat({ts::ident("z", s), ts::binop("=", s), ts::expr(eq::num(bestZ), s)});
+            ts::Box l2 = gridT_ >= 0.999f || !finiteC(fz)
+                             ? ts::hcat({fl, ts::parens(ts::ident("z", s), s), ts::binop("=", s), ts::expr(eq::num(bestW), s)})
+                             : ts::hcat({ts::ident("w", s), ts::binop("=", s), ts::expr(eq::num(bestW), s)});
+            ts::Box b = l1;
+            b.w = std::max(l1.w, l2.w);
+            float gap = l1.desc + 8 + l2.asc;
+            for (auto p : l2.prims) {
+                p.a.y += gap; p.b.y += gap;
+                for (auto& q : p.pts) q.y += gap;
+                b.prims.push_back(p);
+            }
+            b.desc = gap + l2.desc;
+            hoverLabel(dl, bestS, b, col(lineCol));
+            return;
+        }
+    }
+
+    // not near a line: the point under the cursor and where f sends it
     double zx, zy;
     view_.s2w(m, zx, zy);
     const cplx z(zx, zy);
-    EvalEnv env = makeEnv();
-    const Func& cur = displayFunc();
     cplx fz = evalF(cur, z, 0, env);
     if (!finiteC(fz)) return;
     cplx w = (1.0 - (double)gridT_) * z + (double)gridT_ * fz;
@@ -581,7 +646,6 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
         dl->AddCircle(W, 6.f, col(BG), 0, 2.f);
     }
     dl->AddCircleFilled(m, 4.5f, col(WHITE));
-    const float s = 19.f;
     ts::Box fl = (complex_ && deriv_) ? ts::hcat({ts::ident("f", s), ts::text("\xE2\x80\xB2", s)}) : ts::ident("f", s);
     ts::Box l1 = ts::hcat({ts::ident("z", s), ts::binop("=", s), ts::expr(eq::num(z), s)});
     ts::Box l2 = ts::hcat({fl, ts::parens(ts::ident("z", s), s), ts::binop("=", s), ts::expr(eq::num(fz), s)});

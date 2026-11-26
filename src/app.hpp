@@ -258,7 +258,7 @@ using NoteItems = std::vector<NoteItem>;
     X(float, probeX_, 1.f) X(float, probeY_, 0.5f) X(ImVec2, probeScreen_, {}) X(bool, probeVisible_, false) \
     X(bool, domainColor_, false) X(float, dcOpacity_, 0.75f) X(unsigned int, dcTex_, 0u) X(int, dcW_, 0) \
     X(int, dcH_, 0) X(uint64_t, dcHash_, 0) X(U32Vec, dcPixels_, {})                                   \
-    X(GridLines, gridLines_, {}) X(IntVec, gridKinds_, {}) X(uint64_t, gridHash_, 0)                    \
+    X(GridLines, gridLines_, {}) X(GridLines, gridInputs_, {}) X(IntVec, gridKinds_, {}) X(uint64_t, gridHash_, 0)                    \
     X(CplxVec, surfVals_, {}) X(uint64_t, surfHash_, 0) X(SegList, curveSegs_, {}) X(uint64_t, curveHash_, 0) \
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
     X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
