@@ -539,6 +539,7 @@ bool App::loadProject(const std::string& path) {
         fade_ = 1;
         fadeStage_ = 0;
         view_.cx = p.cx; view_.cy = p.cy; view_.scale = targetScale_ = p.s; view_.aspect = p.a;
+        homeScale_ = p.s;
         zooming_ = false;
         for (int r : p.hidden)
             if (r >= 0 && r < (int)funcs_.size()) hiddenRows_.insert(funcs_[r].id);

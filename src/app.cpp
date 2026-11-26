@@ -158,6 +158,7 @@ void App::applyFit() {
     if (complex_ || threeD_ || want3D_) { view_.scale = std::min(sx, sy); view_.aspect = 1; }
     else { view_.scale = sx; view_.aspect = sy / sx; }
     targetScale_ = view_.scale;
+    homeScale_ = view_.scale;
     zooming_ = false;
     fitPending_ = false;
 }
@@ -480,6 +481,7 @@ void App::updatePaneAnimations(float dt) {
                 rebuildParams();
             } else {
                 targetDist_ = camTo_.dist;
+                homeDist_ = camTo_.dist;
             }
         }
         cam_.s = lerpCam(camFrom_, camTo_, theme::smooth(dimP_));
@@ -605,6 +607,7 @@ void App::resetView() {
         view_.cx = view_.cy = 0;
         view_.aspect = 1;
         targetScale_ = 72;
+        homeScale_ = 72;
         zoomAnchorS_ = view_.center();
         zoomAnchorX_ = zoomAnchorY_ = 0;
         zooming_ = true;
@@ -661,6 +664,15 @@ void App::runScriptedActions() {
             }
         }
     }
+}
+
+float App::snapRadius() const {
+    // 14 px at the pane's starting zoom, growing as you zoom in (curves spread apart) and
+    // shrinking as you zoom out (curves bunch together)
+    double z = 1;
+    if (threeD_) z = homeDist_ > 0 ? homeDist_ / std::max(1e-9, cam_.s.dist) : 1;
+    else z = view_.scale / std::max(1e-12, homeScale_);
+    return (float)std::clamp(14.0 * z, 6.0, 40.0);
 }
 
 bool App::canHover() const {
@@ -920,6 +932,7 @@ void App::loadExample(int i) {
         view_.cx = ex.cx;
         view_.cy = ex.cy;
         view_.scale = targetScale_ = ex.scale;
+        homeScale_ = ex.scale;
         view_.aspect = ex.aspect;
         zooming_ = false;
     } else if (!ex.threeD) {

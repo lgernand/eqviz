@@ -344,26 +344,37 @@ void App::drawRealCurves(ImDrawList* dl, float alpha) {
     auto hover = [&] {
         if (!canHover()) return;
         ImVec2 m = ImGui::GetIO().MousePos;
-        struct Cand { const std::vector<std::vector<ImVec2>>* segs; std::function<double(double)> f; int color; const char* name; };
+        struct Cand { const std::vector<std::vector<ImVec2>>* segs; std::function<double(double)> f; int color; const char* name; long long key; };
         std::vector<Cand> cands;
-        if (activeVisible) cands.push_back({&curveSegs_, F, activeColor, act ? act->label : ""});
-        cands.push_back({&dsegs, [&](double x) { return realPart(evalF(fx_, x, 0, env)); }, GREEN_C, ""});
+        if (activeVisible) cands.push_back({&curveSegs_, F, activeColor, act ? act->label : "", act ? act->id : 0});
+        cands.push_back({&dsegs, [&](double x) { return realPart(evalF(fx_, x, 0, env)); }, GREEN_C, "", 1000000});
         for (size_t i = 0; i < funcs_.size(); ++i) {
             const FuncDef& d = funcs_[i];
             if ((int)i == active_ || !rowVisible(d) || !d.f.ok()) continue;
             const Func* fn = &d.f;
-            cands.push_back({&rowCache_[d.id].segs, [fn, &envFull](double x) { return realPart(evalF(*fn, x, 0, envFull)); }, d.color, d.label});
+            cands.push_back({&rowCache_[d.id].segs, [fn, &envFull](double x) { return realPart(evalF(*fn, x, 0, envFull)); }, d.color, d.label, d.id});
         }
-        float best = 14.f * 14.f;
-        int bestC = -1;
-        ImVec2 bestP;
-        for (int c = 0; c < (int)cands.size(); ++c)
+        // nearest point on each curve; keep the curve we were already on while it stays in reach
+        const float reach = snapRadius() * snapRadius();
+        int bestC = -1, stickC = -1;
+        float best = reach;
+        ImVec2 bestP, stickP;
+        for (int c = 0; c < (int)cands.size(); ++c) {
+            float dc = reach;
+            ImVec2 pc;
             for (const auto& s : *cands[c].segs)
                 for (const ImVec2& p : s) {
                     float d = (p.x - m.x) * (p.x - m.x) + (p.y - m.y) * (p.y - m.y);
-                    if (d < best) { best = d; bestC = c; bestP = p; }
+                    if (d < dc) { dc = d; pc = p; }
                 }
-        if (bestC < 0) return;
+            if (dc >= reach) continue;
+            if (dc < best) { best = dc; bestC = c; bestP = pc; }
+            if (hoverPane_ == cur_ && cands[c].key == hoverKey_) { stickC = c; stickP = pc; }
+        }
+        if (stickC >= 0) { bestC = stickC; bestP = stickP; }
+        if (bestC < 0) { if (hoverPane_ == cur_) hoverKey_ = kNoHover; return; }
+        hoverKey_ = cands[bestC].key;
+        hoverPane_ = cur_;
         double wx, wy;
         view_.s2w(bestP, wx, wy);
         double fy = cands[bestC].f(wx);
@@ -578,10 +589,13 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
     // Snap to the nearest transformed grid line (like curves on real axes): find the closest
     // point on any warped polyline, interpolating both the warped point and its input z.
     {
-        float best = 14.f * 14.f;
+        const float reach = snapRadius() * snapRadius();
+        float best = reach;
         int bestLine = -1;
         cplx bestZ, bestW;
         ImVec2 bestS;
+        const long long stickLine = hoverPane_ == cur_ && hoverKey_ >= 2000000 ? hoverKey_ - 2000000 : -1;
+        bool stuck = false;
         for (size_t li = 0; li < gridLines_.size() && li < gridInputs_.size(); ++li) {
             for (size_t pi = 0; pi < gridLines_[li].size() && pi < gridInputs_[li].size(); ++pi) {
                 const auto& W = gridLines_[li][pi];
@@ -592,7 +606,10 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
                     float t = len2 > 0 ? std::clamp(((m.x - a.x) * dx + (m.y - a.y) * dy) / len2, 0.f, 1.f) : 0.f;
                     ImVec2 q(a.x + dx * t, a.y + dy * t);
                     float d = (q.x - m.x) * (q.x - m.x) + (q.y - m.y) * (q.y - m.y);
-                    if (d < best) {
+                    // keep the line we were already on while it stays in reach
+                    const bool sticky = (long long)li == stickLine;
+                    if (d < reach && (sticky ? (!stuck || d < best) : (!stuck && d < best))) {
+                        stuck = stuck || sticky;
                         best = d;
                         bestLine = (int)li;
                         bestS = q;
@@ -602,7 +619,10 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
                 }
             }
         }
+        if (bestLine < 0 && hoverPane_ == cur_) hoverKey_ = kNoHover;
         if (bestLine >= 0) {
+            hoverKey_ = 2000000 + bestLine;
+            hoverPane_ = cur_;
             const int kind = gridKinds_[bestLine];
             const int lineCol = kind == 2 ? YELLOW_C : kind == 3 ? RED_C : BLUE_C;
             cplx fz = evalF(cur, bestZ, 0, env);

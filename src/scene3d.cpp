@@ -402,7 +402,7 @@ void App::drawScene3D(ImDrawList* dl) {
     // ---- hover: front-most surface sample near the cursor
     if (canHover() && hs > 0.99f && sa > 0.005f) {
         ImVec2 m = ImGui::GetIO().MousePos;
-        const float r2 = 14.f * 14.f;
+        const float r2 = snapRadius() * snapRadius();
         float bestD = 1e30f;
         size_t bestK = (size_t)-1;
         ImVec2 bestS;

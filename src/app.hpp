@@ -195,7 +195,8 @@ struct LaunchOptions {
     bool noGpu = false;        // testing: 1 = pan every pane each frame, 2 = zoom every pane each frame
     std::string project;  // project file to open, or "demo:riemann" / "demo:poincare"
     float mouseX = -1, mouseY = -1;  // testing: fake cursor position
-    float drag[5] = {-1, 0, 0, 0, 0};  // testing: x0, y0, x1, y1, start frame of a simulated drag  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
+    float drag[5] = {-1, 0, 0, 0, 0};
+    float mousePath[5] = {-1, 0, 0, 0, 0};  // testing: x0, y0, x1, y1, start frame (no button held)  // testing: x0, y0, x1, y1, start frame of a simulated drag  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
 };
 
 // ------------------------------------------------------------------ panes
@@ -263,7 +264,7 @@ using NoteItems = std::vector<NoteItem>;
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
     X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
     X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)               \
-    X(bool, isNote_, false) X(std::string, noteText_, {}) X(float, noteScroll_, 0.f) X(float, noteContentH_, 0.f) \
+    X(double, homeScale_, 72) X(double, homeDist_, 0) X(bool, isNote_, false) X(std::string, noteText_, {}) X(float, noteScroll_, 0.f) X(float, noteContentH_, 0.f) \
     X(uint64_t, noteLayoutHash_, 0) X(NoteItems, noteItems_, {}) X(float, noteColW_, 0.f)                   \
     X(bool, lockZScale_, false) X(bool, fitZEveryFrame_, false) X(ColumnCache, activeCC_, {}) X(ColumnCache, derivCC_, {})            \
     X(double, lastScale_, 0) X(double, scaleChangeT_, -10) X(bool, zoomingNow_, false)                 \
@@ -373,6 +374,7 @@ public:
     void handleLayoutInput();
     void drawLayoutChrome(ImDrawList* dl);
     void drawRotateControl(int pane);
+    float snapRadius() const;  // hover snap distance in pixels, scaled with zoom
     // note panes (notes.cpp)
     bool addNoteNext_ = false;              // "Add pane" creates a note pane
     int pendingNotePane_ = -1;              // context note waiting for the first frame's layout
@@ -383,6 +385,10 @@ public:
     bool scrollNoteAt(ImVec2 m, float delta);  // true if a note under m consumed the scroll
     void addContextNote(const char* text, float heightFrac);
     int rotateDragPane_ = -1;
+    // sticky hover: the curve / grid line the readout is on, kept until the cursor leaves it
+    long long hoverKey_ = -1;
+    int hoverPane_ = -1;
+    static constexpr long long kNoHover = -1;
     float panelScrollReq_ = -1;  // testing: scroll the panel to this y  // on-canvas spin button + speed slider for 3D panes
     bool inVisible(ImVec2 p) const { return p.x >= visRect_.x && p.x < visRect_.z && p.y >= visRect_.y && p.y < visRect_.w; }
     void initPane();            // defaults for a freshly created pane

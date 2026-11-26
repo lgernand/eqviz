@@ -183,6 +183,7 @@ int main(int argc, char** argv) {
         else if (a == "--no-gpu") opt.noGpu = true;
         else if (a == "--render-icon") { renderIcon = next(); opt.width = opt.height = 512; }
         else if (a == "--mouse") std::sscanf(next().c_str(), "%f,%f", &opt.mouseX, &opt.mouseY);
+        else if (a == "--mousepath") std::sscanf(next().c_str(), "%f,%f,%f,%f,%f", &opt.mousePath[0], &opt.mousePath[1], &opt.mousePath[2], &opt.mousePath[3], &opt.mousePath[4]);
         else if (a == "--drag") std::sscanf(next().c_str(), "%f,%f,%f,%f,%f", &opt.drag[0], &opt.drag[1], &opt.drag[2], &opt.drag[3], &opt.drag[4]);
         else if (a == "-h" || a == "--help") { usage(); return 0; }
         else { std::fprintf(stderr, "unknown option %s\n", a.c_str()); usage(); return 1; }
@@ -291,6 +292,11 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         if (opt.mouseX >= 0) io.AddMousePosEvent(opt.mouseX, opt.mouseY);
+        if (opt.mousePath[0] >= 0) {  // simulated cursor glide over 20 frames
+            float u = std::clamp((frame - opt.mousePath[4]) / 20.f, 0.f, 1.f);
+            io.AddMousePosEvent(opt.mousePath[0] + (opt.mousePath[2] - opt.mousePath[0]) * u,
+                                opt.mousePath[1] + (opt.mousePath[3] - opt.mousePath[1]) * u);
+        }
         if (opt.drag[0] >= 0) {  // simulated drag: press, move over 20 frames, release
             int f0 = (int)opt.drag[4], k = frame - f0;
             if (k >= 0 && k <= 24) {
