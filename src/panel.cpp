@@ -355,6 +355,20 @@ void App::drawPanel() {
         float t = gridT_;
         if (ImGui::SliderFloat("##gt", &t, 0.f, 1.f, "%.2f")) { gridT_ = t; gridAnim_ = false; }
         if (ImGui::Button("Replay transformation", ImVec2(-1, 32))) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
+        {
+            float half = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
+            if (ImGui::Button("Fit grid to view", ImVec2(half, 30))) fitGridToView();
+            ImGui::SetItemTooltip("Rebuild the input grid from the region on screen.\n"
+                                  "The grid otherwise stays fixed while you zoom and pan.");
+            ImGui::SameLine(0, 6);
+            float sp = (float)gridStep_;
+            ImGui::SetNextItemWidth(half);
+            if (ImGui::SliderFloat("##gsp", &sp, 0.001f, 10.f, "spacing %.3g", ImGuiSliderFlags_Logarithmic) && sp > 0) {
+                gridStep_ = sp;
+                gridHash_ = 0;
+            }
+            ImGui::SetItemTooltip("Spacing between input grid lines");
+        }
         ImGui::Checkbox("Domain colouring", &domainColor_);
         if (domainColor_) {
             labelRow("Opacity", 110);

@@ -480,7 +480,7 @@ void App::updatePaneAnimations(float dt) {
         if (fade_ <= 0) {
             fade_ = 0;
             complex_ = pendingComplex_;
-            if (complex_) view_.aspect = 1;
+            if (complex_) { view_.aspect = 1; gridStep_ = 0; }
             morph_ = 1;
             prev_ = Func{};
             rebuildParams();
@@ -617,6 +617,12 @@ void App::runScriptedActions() {
         else if (a == "d") toggleDeriv();
         else if (a == "p") { sumPos_ = 0; sumShowAll_ = false; sumPlaying_ = true; }
         else if (!a.empty() && a[0] == 'e') loadExample(std::atoi(a.c_str() + 1));
+        else if (!a.empty() && a[0] == 'Z') {  // Zx;y;scale : jump the view (zoom testing)
+            double x = 0, y = 0, sc = 72;
+            if (std::sscanf(a.c_str() + 1, "%lf;%lf;%lf", &x, &y, &sc) == 3) {
+                view_.cx = x; view_.cy = y; view_.scale = targetScale_ = sc; zooming_ = false;
+            }
+        }
     }
 }
 
@@ -768,6 +774,7 @@ void App::loadExample(int i) {
         view_.scale = targetScale_ = 72;
         zooming_ = false;
     }
+    gridStep_ = 0;
     setSingleFunction(ex.eq);
     if (complex_ && !ex.threeD) { gridT_ = 0; gridAnimP_ = 0; gridAnim_ = true; }
     if (ex.threeD != threeD_ && !dimAnimating_) startDim(ex.threeD);

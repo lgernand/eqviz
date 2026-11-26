@@ -119,6 +119,7 @@ void App::resetForProject() {
         active_ = 0;
         hiddenRows_.clear();
         rowCache_.clear();
+        gridStep_ = 0;
     }
     enterPane(start);
     funcs_.clear();

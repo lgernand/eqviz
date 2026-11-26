@@ -215,7 +215,8 @@ using CplxVec = std::vector<cplx>;
     X(GridLines, gridLines_, {}) X(IntVec, gridKinds_, {}) X(uint64_t, gridHash_, 0)                    \
     X(CplxVec, surfVals_, {}) X(uint64_t, surfHash_, 0) X(SegList, curveSegs_, {}) X(uint64_t, curveHash_, 0) \
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
-    X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)
+    X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
+    X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -329,7 +330,8 @@ public:
     void sampleYs(const std::function<double(double)>& F, std::vector<double>& ys) const;  // one value per pixel column
     void segsFromYs(const std::vector<double>& ys, const std::function<double(double)>& F,
                     std::vector<std::vector<ImVec2>>& segs) const;
-    void warpedGrid();  // fills gridLines_ / gridKinds_
+    void warpedGrid();     // fills gridLines_ / gridKinds_
+    void fitGridToView();  // input grid of the complex transform = the current view
 
     // ---- hover readout
     bool canHover() const;  // mouse over the canvas, not over UI, no button held

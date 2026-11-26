@@ -364,7 +364,7 @@ static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<st
     const float Wd = v.cmax.x - v.cmin.x, H = v.cmax.y - v.cmin.y;
     const float L = v.cmin.x - 60, R = v.cmax.x + 60, T = v.cmin.y - 60, B = v.cmax.y + 60;
     const float maxD = 6.f, jumpD = std::max(Wd, H) * 0.9f;
-    const int maxDepth = 8;
+    const int maxDepth = 14;  // off-screen pieces are never subdivided, so depth is cheap
     float lenPx = (float)(std::abs(b - a) * v.scale);
     int baseN = std::clamp((int)(lenPx / 10), 24, 400);
     std::vector<cplx> cur;
@@ -414,26 +414,41 @@ static void mapLine(const WF& W, cplx a, cplx b, const View2D& v, std::vector<st
     flush();
 }
 
+// The input grid is chosen once (from the view when the transform starts) and then
+// kept fixed, so zooming or panning magnifies the same transformed lines instead of
+// swapping in a grid whose image may lie off-screen.
+void App::fitGridToView() {
+    double x0, y0, x1, y1;
+    view_.s2w(view_.cmin, x0, y1);
+    view_.s2w(view_.cmax, x1, y0);
+    gridStep_ = niceStep(95.0 / view_.scale) / 2;
+    const double m = 2 * gridStep_;
+    gridX0_ = x0 - m; gridX1_ = x1 + m;
+    gridY0_ = y0 - m; gridY1_ = y1 + m;
+    gridHash_ = 0;
+}
+
 void App::warpedGrid() {
     const View2D& v = view_;
+    if (!(gridStep_ > 0)) fitGridToView();
     Hasher hh;
     hh.u(evalHash());
+    hh.d(gridX0_); hh.d(gridX1_); hh.d(gridY0_); hh.d(gridY1_); hh.d(gridStep_);
     hh.d(gridT_); hh.d(v.cx); hh.d(v.cy); hh.d(v.scale); hh.d(v.aspect);
     hh.d(v.cmin.x); hh.d(v.cmin.y); hh.d(v.cmax.x); hh.d(v.cmax.y);
     if (hh.h == gridHash_ && !gridLines_.empty()) return;
     gridHash_ = hh.h;
     auto& out = gridLines_;
     auto& kinds = gridKinds_;
-    double x0, y0, x1, y1;
-    v.s2w(v.cmin, x0, y1);
-    v.s2w(v.cmax, x1, y0);
-    const double sp = niceStep(95.0 / v.scale) / 2, m = 2 * sp;
+    const double x0 = gridX0_, x1 = gridX1_, y0 = gridY0_, y1 = gridY1_;
+    double sp = gridStep_;
+    while ((x1 - x0) / sp > 240 || (y1 - y0) / sp > 240) sp *= 2;  // keep the line count sane
     struct Ln { cplx a, b; int kind; };
     std::vector<Ln> ls;
-    for (long i = (long)std::ceil((x0 - m) / sp); i <= (long)std::floor((x1 + m) / sp); ++i)
-        ls.push_back({cplx(i * sp, y0 - m), cplx(i * sp, y1 + m), i == 0 ? 3 : (i % 2 == 0 ? 1 : 0)});
-    for (long j = (long)std::ceil((y0 - m) / sp); j <= (long)std::floor((y1 + m) / sp); ++j)
-        ls.push_back({cplx(x0 - m, j * sp), cplx(x1 + m, j * sp), j == 0 ? 2 : (j % 2 == 0 ? 1 : 0)});
+    for (long i = (long)std::ceil(x0 / sp); i <= (long)std::floor(x1 / sp); ++i)
+        ls.push_back({cplx(i * sp, y0), cplx(i * sp, y1), i == 0 ? 3 : (i % 2 == 0 ? 1 : 0)});
+    for (long j = (long)std::ceil(y0 / sp); j <= (long)std::floor(y1 / sp); ++j)
+        ls.push_back({cplx(x0, j * sp), cplx(x1, j * sp), j == 0 ? 2 : (j % 2 == 0 ? 1 : 0)});
 
     EvalEnv env = makeEnv();
     const Func& cur = displayFunc();
