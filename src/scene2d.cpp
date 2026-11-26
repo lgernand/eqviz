@@ -836,11 +836,17 @@ void App::drawScene2D(ImDrawList* dl) {
         return;
     }
     if (complex_ && domainColor_) drawDomainColoring(dl, a);
-    drawPlane2D(dl, complex_ ? 0.45f : 1.f, true);
+    drawPlane2D(dl, complex_ ? 0.45f : matrix_ ? 0.22f : 1.f, true);
     if (complex_) {
         probeVisible_ = false;
         drawComplexGrid(dl, a);
+    } else if (matrix_) {
+        probeVisible_ = false;
+        drawMatrixScene(dl);
     } else {
+        drawShade(dl);
         drawRealCurves(dl, a);
+        drawTrace(dl);
+        if (unitCircle_) drawUnitCircle(dl);
     }
 }

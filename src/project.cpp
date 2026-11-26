@@ -111,6 +111,7 @@ void App::rebuildProject(bool sameRow) {
 
 void App::resetForProject() {
     projNote_.clear();
+    exitLesson();
     keys_.clear();
     tlT_ = 0;
     tlPlaying_ = false;
@@ -645,6 +646,24 @@ void App::drawProjectSection() {
     if (ImGui::Button("Open", ImVec2(bw, 0))) ImGui::OpenPopup("##open");
     ImGui::SameLine(0, gap);
     if (ImGui::Button("New", ImVec2(bw, 0))) newProject();
+    {   // lessons
+        const bool in = lessonIdx_ >= 0;
+        if (in) {
+            ImGui::PushStyleColor(ImGuiCol_Button, mixv(BG, BLUE_C, 0.42f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, mixv(BG, BLUE_C, 0.55f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, mixv(BG, BLUE_C, 0.68f));
+        }
+        if (ImGui::Button(in ? "Lessons  \xC2\xB7  in a lesson" : "Lessons: trigonometry, calculus, linear algebra", ImVec2(-1, 30)))
+            ImGui::OpenPopup("##lessons");
+        if (in) ImGui::PopStyleColor(3);
+        ImGui::SetItemTooltip("Step-by-step lessons with live graphs and questions to check yourself");
+        if (ImGui::BeginPopup("##lessons")) {
+            drawLessonLibrary();
+            ImGui::Spacing();
+            ImGui::TextDisabled("\xE2\x86\x90 \xE2\x86\x92 move between steps. Progress is remembered.");
+            ImGui::EndPopup();
+        }
+    }
     if (ImGui::BeginPopup("##open")) {
         ImGui::TextDisabled("Millennium Prize Problems");
         if (ImGui::Selectable("P vs NP: polynomial vs exponential time")) loadDemoPvsNP();

@@ -37,7 +37,7 @@ void App::layoutRects(int n, ImVec4 r) {
 
 void App::computePaneRects() {
     ImVec2 ds = ImGui::GetIO().DisplaySize;
-    visRect_ = ImVec4(panelW_, 0, ds.x, ds.y - (tlShown_ && !exporting_ ? tlHeight_ : 0.f));
+    visRect_ = ImVec4(panelW_, 0, ds.x, ds.y - (tlShown_ && !exporting_ && lessonIdx_ < 0 ? tlHeight_ : 0.f) - lessonBarH());
     const float vw = visRect_.z - visRect_.x, vh = visRect_.w - visRect_.y;
     float ww = vw, wh = vh;
     if (extendWorkspace_) {

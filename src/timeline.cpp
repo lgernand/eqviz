@@ -91,6 +91,17 @@ Keyframe App::captureKeyframe(double t) {
         kp.domainColor = domainColor_;
         kp.fractal = fractal_;
         kp.julia = fracJulia_;
+        kp.unitCircle = unitCircle_;
+        kp.matrix = matrix_;
+        kp.circleOpts = circleOpts_;
+        kp.matOpts = matOpts_;
+        kp.mat[0] = matA_; kp.mat[1] = matB_; kp.mat[2] = matC_; kp.mat[3] = matD_;
+        kp.vx = matVx_; kp.vy = matVy_; kp.bx = matBx_; kp.by = matBy_;
+        kp.probeX = probeX_;
+        kp.trace = trace_;
+        kp.shadeRow = shadeRow_;
+        kp.shadeLo = shadeLo_;
+        kp.shadeHi = shadeHi_;
         kp.active = active_;
         kp.hidden = hiddenRows_;
         kp.noteScroll = noteScroll_;
@@ -117,7 +128,9 @@ void App::addKeyframe() {
     if (atEnd) tlT_ += 2.0;  // ready for the next shot
 }
 
-void App::applyTimeline(double t, bool animate) {
+void App::applyTimeline(double t, bool animate) { applyKeys(keys_, t, animate); }
+
+void App::applyKeys(const std::vector<Keyframe>& keys_, double t, bool animate) {
     if (keys_.empty()) return;
     // the segment containing t: keys_[k] .. keys_[k + 1]
     int k = 0;
@@ -132,16 +145,20 @@ void App::applyTimeline(double t, bool animate) {
     }
 
     // variables (by name, so rows added later keep working)
-    for (Param& p : params_) {
-        const float* va = nullptr;
-        const float* vb = nullptr;
-        for (auto& [n, v] : A.params) if (n == p.name) va = &v;
-        for (auto& [n, v] : B.params) if (n == p.name) vb = &v;
-        if (!va) continue;
-        p.playing = false;
-        p.value = (float)(vb ? lerp(*va, *vb, u) : *va);
-        if (p.integer) p.value = std::round(p.value);
-    }
+    auto applyParams = [&] {
+        for (Param& p : params_) {
+            const float* va = nullptr;
+            const float* vb = nullptr;
+            for (auto& [n, v] : A.params) if (n == p.name) va = &v;
+            for (auto& [n, v] : B.params) if (n == p.name) vb = &v;
+            if (!va) continue;
+            p.playing = false;
+            p.value = (float)(vb ? lerp(*va, *vb, u) : *va);
+            if (p.integer) p.value = std::round(p.value);
+        }
+        updateParamValues();
+    };
+    applyParams();
     if (A.sumPos >= 0) {
         const double target = B.sumPos >= 0 ? lerp(A.sumPos, B.sumPos, u) : A.sumPos;
         if (!animate || A.sumPos != B.sumPos) {
@@ -178,6 +195,24 @@ void App::applyTimeline(double t, bool animate) {
         hiddenRows_ = a.hidden;
         domainColor_ = a.domainColor;
         if (a.fractal != fractal_ || (a.fractal && a.julia != fracJulia_)) setFractal(a.fractal, a.julia);
+        const bool paramsChange = a.unitCircle != unitCircle_ || a.trace != trace_ || a.shadeLo != shadeLo_ || a.shadeHi != shadeHi_;
+        unitCircle_ = a.unitCircle;
+        matrix_ = a.matrix;
+        circleOpts_ = a.circleOpts;
+        matOpts_ = a.matOpts;
+        trace_ = a.trace;
+        shadeRow_ = a.shadeRow;
+        shadeLo_ = a.shadeLo;
+        shadeHi_ = a.shadeHi;
+        if (paramsChange) rebuildParams();  // panes can need sliders no row uses (theta, trace and bounds)
+        if (!draggingVec_) {
+            matA_ = lerp(a.mat[0], b.mat[0], u); matB_ = lerp(a.mat[1], b.mat[1], u);
+            matC_ = lerp(a.mat[2], b.mat[2], u); matD_ = lerp(a.mat[3], b.mat[3], u);
+            matVx_ = lerp(a.vx, b.vx, u); matVy_ = lerp(a.vy, b.vy, u);
+        }
+        matBx_ = lerp(a.bx, b.bx, u); matBy_ = lerp(a.by, b.by, u);
+        matAnim_ = 1;
+        probeX_ = (float)lerp(a.probeX, b.probeX, u);
         if (a.deriv != deriv_) {
             if (animate) toggleDeriv();
             else { deriv_ = a.deriv; derivCreate_ = 1; morph_ = 1; prev_ = Func{}; }
@@ -234,9 +269,11 @@ void App::applyTimeline(double t, bool animate) {
         }
     }
     enterPane(start);
+    applyParams();  // again: switching panes on can create sliders (theta, trace, bounds)
 }
 
 void App::updateTimeline(float dt) {
+    updateLesson(dt);
     if (exporting_) {
         if (exportWarm_ > 0) {  // settle the first keyframe before recording
             --exportWarm_;
@@ -367,7 +404,7 @@ void App::finishExport(bool cancelled) {
 // ------------------------------------------------------------------ strip
 
 void App::drawTimeline() {
-    if (!tlShown_ || exporting_) return;
+    if (!tlShown_ || exporting_ || lessonIdx_ >= 0) return;
     ImGuiIO& io = ImGui::GetIO();
     const float x0 = visRect_.x, w = io.DisplaySize.x - x0;
     ImGui::SetNextWindowPos(ImVec2(x0, io.DisplaySize.y - tlHeight_));

@@ -88,6 +88,7 @@ void App::saveSettings() const {
     out << "math_font\t" << mathFontChoices()[mathFontIdx_].name << "\n";
     out << "text_scale\t" << textScale_ << "\n";
     out << "label_scale\t" << labelScale_ << "\n";
+    for (const auto& [id, step] : lessonProgress_) out << "lesson\t" << id << "\t" << step << "\n";
 }
 
 void App::loadSettings() {
@@ -114,6 +115,7 @@ void App::loadSettings() {
                     if (f[1] == mathFontChoices()[i].name && i != 0) pendingMathFont_ = i;
             } else if (f[0] == "text_scale") textScale_ = std::clamp(std::stof(f[1]), 0.7f, 1.6f);
             else if (f[0] == "label_scale") labelScale_ = std::clamp(std::stof(f[1]), 0.5f, 2.f);
+            else if (f[0] == "lesson" && f.size() > 2) lessonProgress_[f[1]] = std::stoi(f[2]);
         } catch (...) {
         }
     }

@@ -87,6 +87,34 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   k-th zero's imaginary part, 414 tabulated up to t = 700), `Ei(z)`, `li(z)`, `erf(x)`, `erfc(x)`, and two-argument `mod(a, m)` and `legendre(a, p)`.
 - **Y stretch** for real graphs, so curves like |ζ(1/2 + ix)| don't look flat.
 
+## Lessons
+
+**Lessons** (the button under the project name) teaches with live graphs. Each lesson puts its explanation in a
+pane on the left. Every step moves the graphs into place with smooth transitions: sliders sweep, matrices morph,
+and curves appear. Many steps end with a **Check yourself** question. Answers can be numbers or expressions, such
+as `0.5`, `sqrt(3)/2` or `2pi/3`, and come with hints. Move between steps with **Back** and **Next**, with
+**←** and **→**, or by clicking the progress dots. Your progress is remembered.
+
+- **Trigonometry:** the unit circle and radians, sine and cosine waves, tangent and its friends, and shaping a
+  wave with a sin(b(x − c)) + d.
+- **Calculus:** limits, the derivative (secant to tangent), what f′ tells you, area under a curve (Riemann sums),
+  the fundamental theorem, and Taylor series.
+- **Linear algebra:** vectors and combinations, matrices as transformations, the determinant, solving Mx = b,
+  and eigenvectors.
+
+The lessons use four teaching tools. You can also turn them on yourself for any real-axes pane, in the panel's
+**Graph** section:
+
+- **Unit circle:** the angle θ (a slider, or drag the point) with cos, sin, tan, sec, cot and csc drawn as
+  coloured lengths. Special angles snap and show exact values such as √3/2. Radians or degrees.
+- **Matrix transformation:** a 2×2 matrix applied to the whole plane, shown as the transformed grid, the images of
+  î and ĵ (the matrix columns), the unit square with its area (the determinant), the eigenvector lines with their
+  eigenvalues, and a draggable vector v with Mv and a target b. Presets cover rotation, shear, stretch, reflection
+  and a det-0 squash. **Play** animates from the identity.
+- **Trace x =** a slider: a vertical line at that x, with every curve's value there.
+- **Shade area:** fills the region under a row between two bounds (numbers or expressions in the sliders) and
+  shows the integral.
+
 ## Fractals
 
 On the complex plane, tick **Fractal: iterate f** and the pane's function becomes a map that is applied over
@@ -196,7 +224,7 @@ The control panel can be collapsed with the « button (or `Tab`) to give the pan
 window; the floating ☰ button brings it back.
 
 Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum · `D` derivative · `C` real/complex ·
-`3` 2D/3D · `R` reset view · `T` timeline · `K` add/update keyframe (`Space` plays the timeline when it is open
+`3` 2D/3D · `R` reset view · `←` `→` lesson steps · `T` timeline · `K` add/update keyframe (`Space` plays the timeline when it is open
 and has two or more keyframes).
 
 ## Command line
@@ -205,7 +233,7 @@ and has two or more keyframes).
 --eq "<expr>"  --complex  --3d  --deriv  --domain-color  --rotate  --size WxH
 --frames N --shot out.bmp     render N frames at 60 fps, save the last one, exit
 --sum-pos T                   freeze the summation player at T terms
---project FILE                open a saved project, or demo:riemann / demo:poincare / demo:navier-stokes / demo:fractals
+--project FILE                open a saved project, demo:riemann / poincare / navier-stokes / fractals, or lesson:<id> (e.g. lesson:calc-derivative)
 --actions "10:c,90:3,150:d"   scripted toggles at given frames (c, 3, d, p, e<N>)
 --mouse X,Y                   fake cursor position (testing hover readouts)
 ```
@@ -222,6 +250,8 @@ and has two or more keyframes).
 | `src/themes.cpp`, `src/fonts.cpp`, `src/appearance.cpp` | colour themes, font choices, Appearance section and settings |
 | `src/notes.cpp`, `src/demo_notes.cpp` | note panes (markup, layout, editor) and the demos' explanations |
 | `src/timeline.cpp`, `src/video*` | keyframes, playback, timeline strip; MP4 writer (AVFoundation) |
+| `src/lesson.cpp`, `src/lessons_content.cpp` | lesson engine (steps, transitions, questions, progress, lesson bar) and the lessons |
+| `src/overlays.cpp` | unit circle, matrix transformation, trace line and shaded area |
 | `src/fractal.cpp` | fractal mode: escape-time iteration, CPU double-precision renderer, orbits, panel section |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |

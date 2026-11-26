@@ -297,7 +297,9 @@ void App::drawNotePane(ImDrawList* dl) {
     const float maxScroll = std::max(0.f, noteContentH_ + 2 * pad - H);
     noteScroll_ = std::clamp(noteScroll_, 0.f, maxScroll);
     const float ox = canvasMin_.x + std::max(pad, (W - colW) * 0.5f);
-    const float oy = canvasMin_.y + pad - noteScroll_;
+    // leave room for the floating "show panel" button when the panel is hidden
+    const bool underButton = panelSlide_ > 0.5f && canvasMin_.x < 8 && canvasMin_.y < 8;
+    const float oy = canvasMin_.y + pad + (underButton ? 36.f : 0.f) - noteScroll_;
     const ImU32 cBody = ImGui::ColorConvertFloat4ToU32(surface(0.84f)), cHead = col(WHITE), cMath = col(WHITE),
                 cAccent = col(BLUE_C);
     for (const NoteItem& it : noteItems_) {

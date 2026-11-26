@@ -474,7 +474,10 @@ void App::drawPanel() {
             ImGui::PopStyleColor();
         }
     } else if (!threeD_ && !complex_) {
-        if (deriv_) {
+        drawOverlaySection();
+        ImGui::Spacing();
+        if (matrix_ || unitCircle_) {
+        } else if (deriv_) {
             double x0, x1, yy;
             view_.s2w(canvasMin_, x0, yy);
             view_.s2w(canvasMax_, x1, yy);
@@ -485,12 +488,14 @@ void App::drawPanel() {
             ImGui::TextWrapped("Turn on the derivative to drag a tangent line along the curve.");
             ImGui::PopStyleColor();
         }
-        labelRow("Y stretch", 120);
-        float asp = (float)view_.aspect, bw11 = 48;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - bw11 - 6);
-        if (ImGui::SliderFloat("##asp", &asp, 0.05f, 50.f, "%.2f\xC3\x97", ImGuiSliderFlags_Logarithmic)) view_.aspect = asp;
-        ImGui::SameLine(0, 6);
-        if (ImGui::Button("1:1", ImVec2(bw11, 0))) view_.aspect = 1;
+        if (!matrix_ && !unitCircle_) {  // those need equal axes
+            labelRow("Y stretch", 120);
+            float asp = (float)view_.aspect, bw11 = 48;
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - bw11 - 6);
+            if (ImGui::SliderFloat("##asp", &asp, 0.05f, 50.f, "%.2f\xC3\x97", ImGuiSliderFlags_Logarithmic)) view_.aspect = asp;
+            ImGui::SameLine(0, 6);
+            if (ImGui::Button("1:1", ImVec2(bw11, 0))) view_.aspect = 1;
+        }
     }
     if (ImGui::Button("Reset view", ImVec2(-1, 32))) resetView();
     }

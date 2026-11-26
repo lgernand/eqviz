@@ -98,6 +98,10 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
     else if (o.project == "demo:yang-mills") loadDemoYangMills();
     else if (o.project == "demo:bsd") loadDemoBSD();
     else if (o.project == "demo:fractals") loadDemoFractals();
+    else if (o.project.rfind("lesson:", 0) == 0) {
+        for (int li = 0; li < (int)lessonLibrary().size(); ++li)
+            if (lessonLibrary()[li].id == o.project.substr(7)) startLesson(li);
+    }
     else if (!o.project.empty() && loadProject(o.project)) {}
     else {
         setSingleFunction(o.eq.empty() ? kDefaultEq : o.eq.c_str());
@@ -157,7 +161,7 @@ void App::applyFit() {
     double sx = w / std::max(1e-9f, r.y - r.x), sy = h / std::max(1e-9f, r.w - r.z);
     view_.cx = (r.x + r.y) * 0.5;
     view_.cy = (r.z + r.w) * 0.5;
-    if (complex_ || threeD_ || want3D_) { view_.scale = std::min(sx, sy); view_.aspect = 1; }
+    if (complex_ || threeD_ || want3D_ || unitCircle_ || matrix_) { view_.scale = std::min(sx, sy); view_.aspect = 1; }
     else { view_.scale = sx; view_.aspect = sy / sx; }
     targetScale_ = view_.scale;
     homeScale_ = view_.scale;
@@ -258,7 +262,11 @@ void App::frame(float dt) {
         dl->PushClipRect(canvasMin_, canvasMax_, true);
         if (threeD_) drawScene3D(dl);
         else drawScene2D(dl);
-        drawOverlay(dl);
+        {   // teaching panes draw their own labels; skip the formula cards when they show no curves
+            bool anyRow = false;
+            for (const FuncDef& d : funcs_) anyRow |= rowVisible(d) && d.body;
+            if (!((matrix_ || unitCircle_) && !complex_ && !threeD_ && (!anyRow || matrix_))) drawOverlay(dl);
+        }
         dl->PopClipRect();
         if (!dimAnimating_ && !isNote_ && !exporting_) drawRotateControl(i);
     }
@@ -267,6 +275,7 @@ void App::frame(float dt) {
     enterPane(focus_);
     if (!exporting_) drawPanel();
     drawTimeline();
+    drawLessonBar();
 }
 
 // ------------------------------------------------------------------ equation
@@ -332,6 +341,7 @@ void App::rebuildParams() {
     fv.erase("x");
     if (threeD_ && !complex_) fv.erase("y");
     if (anyFractalPane()) fv.erase("c");  // the iteration constant, not a slider
+    paneParamNames(fv);
     std::vector<Param> np;
     for (const auto& name : fv) {
         Param p;
@@ -343,6 +353,7 @@ void App::rebuildParams() {
             p.name = name;
             if (isInt) { p.value = 10; p.min = 0; p.max = 40; }
             else if (name == "y") { p.value = 0; }
+            else if (name == "theta") { p.value = 0.7854f; p.min = 0; p.max = 6.2832f; }
         }
         if (isInt && !p.integer) {
             p.min = std::max(0.f, std::round(p.min));
@@ -470,6 +481,7 @@ void App::updatePaneAnimations(float dt) {
         }
     }
     if (create_ < 1) create_ = std::min(1.f, create_ + dt / 1.5f);
+    if (matAnim_ < 1) matAnim_ = std::min(1.f, matAnim_ + dt / 2.2f);
     if (morph_ < 1) morph_ = std::min(1.f, morph_ + dt / 1.3f);
     if (derivCreate_ < 1) derivCreate_ = std::min(1.f, derivCreate_ + dt / 1.3f);
     if (gridAnim_) {
@@ -630,7 +642,15 @@ void App::runScriptedActions() {
         size_t colon = item.find(':');
         if (colon == std::string::npos || std::atoi(item.c_str()) != frameNo_) continue;
         std::string a = item.substr(colon + 1);
-        if (a == "K") addKeyframe();
+        if (a == "next") lessonGo(lessonStep_ + 1, true);
+        else if (a == "prev") lessonGo(lessonStep_ - 1, true);
+        else if (a.rfind("lstep", 0) == 0) lessonGo(std::atoi(a.c_str() + 5), false);
+        else if (a.rfind("ans", 0) == 0) { std::snprintf(lessonInput_, sizeof lessonInput_, "%s", a.c_str() + 3); lessonCheck(); }
+        else if (a.rfind("lesson:", 0) == 0) {
+            for (int li = 0; li < (int)lessonLibrary().size(); ++li)
+                if (lessonLibrary()[li].id == a.substr(7)) startLesson(li);
+        }
+        else if (a == "K") addKeyframe();
         else if (a == "play") { tlPlaying_ = true; tlT_ = keys_.empty() ? 0 : keys_.front().t; tlScrub_ = true; }
         else if (a == "exporthalf") exportHalf_ = true;
         else if (a.rfind("export", 0) == 0) { if (a.size() > 6) exportFps_ = std::atoi(a.c_str() + 6); startExport(); }
@@ -811,7 +831,8 @@ void App::handleInput(float dt) {
         const bool fractalHere = complex_ && fractal_;
         if (overCanvas && ImGui::IsMouseClicked(0)) {
             float dx = m.x - probeScreen_.x, dy = m.y - probeScreen_.y;
-            if (fractalHere && fracCVisible_ && std::hypot(m.x - fracCScreen_.x, m.y - fracCScreen_.y) < 14) draggingC_ = true;
+            if (overlayMouse(m, true)) {
+            } else if (fractalHere && fracCVisible_ && std::hypot(m.x - fracCScreen_.x, m.y - fracCScreen_.y) < 14) draggingC_ = true;
             else if (probeVisible_ && dx * dx + dy * dy < 16 * 16) draggingProbe_ = true;
             else panning_ = true;
         }
@@ -820,8 +841,10 @@ void App::handleInput(float dt) {
             view_.s2w(m, wx, wy);
             fracC_ = cplx(wx, wy);
         }
-        if (!ImGui::IsMouseDown(0)) draggingProbe_ = panning_ = draggingC_ = false;
-        if (draggingC_ && fractalHere) {
+        if (!ImGui::IsMouseDown(0)) draggingProbe_ = panning_ = draggingC_ = draggingAngle_ = draggingVec_ = false;
+        if (draggingAngle_ || draggingVec_) {
+            overlayMouse(m, false);
+        } else if (draggingC_ && fractalHere) {
             double wx, wy;
             view_.s2w(m, wx, wy);
             fracC_ = cplx(wx, wy);
@@ -906,6 +929,11 @@ void App::handleKeys() {  // keyboard shortcuts act on the focused pane (only wh
         if (exporting_) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape)) finishExport(true);
             return;
+        }
+        if (lessonIdx_ >= 0 && !lessonPlaying_) {
+            const int n = (int)lessonLibrary()[lessonIdx_].steps.size();
+            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false) && lessonStep_ + 1 < n) lessonGo(lessonStep_ + 1, true);
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false) && lessonStep_ > 0) lessonGo(lessonStep_ - 1, true);
         }
         if (ImGui::IsKeyPressed(ImGuiKey_T)) tlShown_ = !tlShown_;
         if (ImGui::IsKeyPressed(ImGuiKey_K)) addKeyframe();

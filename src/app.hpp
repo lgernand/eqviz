@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <optional>
 #include <map>
 #include <memory>
 #include <ostream>
@@ -241,6 +242,13 @@ using NoteItems = std::vector<NoteItem>;
 
 // Everything that belongs to one coordinate plane. App holds the current pane's
 // copy of these members; App::enterPane swaps panes in and out.
+// Unit-circle pane options (bit flags)
+enum : int { kCircSinCos = 1, kCircTan = 2, kCircCot = 4, kCircDegrees = 8, kCircSnap = 16, kCircArc = 32,
+             kCircDefault = kCircSinCos | kCircSnap | kCircArc };
+// Matrix pane options (bit flags)
+enum : int { kMatGrid = 1, kMatBasis = 2, kMatDet = 4, kMatEigen = 8, kMatVector = 16, kMatTarget = 32,
+             kMatDefault = kMatGrid | kMatBasis };
+
 #define EQVIZ_PANE_FIELDS(X)                                                                          \
     X(int, active_, 0) X(eq::NodeP, expr_, {}) X(eq::NodeP, dx_, {}) X(eq::NodeP, dy_, {})              \
     X(Func, f_, {}) X(Func, fx_, {}) X(Func, fy_, {}) X(Func, prev_, {})                                \
@@ -274,7 +282,12 @@ using NoteItems = std::vector<NoteItem>;
     X(double, gridVh_, 0) X(uint64_t, gridContentHash_, 0)                                              \
     X(bool, fractal_, false) X(bool, fracJulia_, false) X(int, fracIter_, 200) X(bool, fracAutoIter_, true) \
     X(int, fracPalette_, 0) X(float, fracDensity_, 1.f) X(std::string, fracStatus_, {})                 \
-    X(uint64_t, fracViewHash_, 0) X(double, fracMoveT_, -10) X(ImVec2, fracCScreen_, {}) X(bool, fracCVisible_, false)
+    X(uint64_t, fracViewHash_, 0) X(double, fracMoveT_, -10) X(ImVec2, fracCScreen_, {}) X(bool, fracCVisible_, false) \
+    X(bool, unitCircle_, false) X(int, circleOpts_, kCircDefault) X(ImVec2, circleHandle_, {}) X(bool, draggingAngle_, false) \
+    X(std::string, trace_, {}) X(int, shadeRow_, -1) X(std::string, shadeLo_, {}) X(std::string, shadeHi_, {})           \
+    X(bool, matrix_, false) X(double, matA_, 1) X(double, matB_, 0) X(double, matC_, 0) X(double, matD_, 1)                 \
+    X(int, matOpts_, kMatDefault) X(double, matVx_, 2) X(double, matVy_, 1) X(double, matBx_, 3) X(double, matBy_, 1)     \
+    X(float, matAnim_, 1.f) X(ImVec2, matHandle_, {}) X(bool, draggingVec_, false)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -292,6 +305,13 @@ struct KeyPane {
     double domainCx = 0, domainCy = 0;
     bool complex = false, threeD = false, deriv = false, domainColor = false;
     bool fractal = false, julia = false;
+    bool unitCircle = false, matrix = false;
+    int circleOpts = 0, matOpts = 0;
+    double mat[4] = {1, 0, 0, 1};
+    double vx = 2, vy = 1, bx = 3, by = 1;
+    float probeX = 1;
+    std::string trace, shadeLo, shadeHi;
+    int shadeRow = -1;
     int active = 0;
     std::set<int> hidden;  // row ids (row indices in project files)
     float noteScroll = 0;
@@ -311,6 +331,40 @@ struct Keyframe {
 struct DemoRow;
 struct DemoParam;
 struct FracJob;
+struct StepCtx;
+class App;
+
+// ------------------------------------------------------------------ lessons (lesson.cpp, lessons_*.cpp)
+
+struct LessonStep {
+    std::string title, text;                // text: note markup (headings, bullets, $maths$)
+    std::function<void(StepCtx&)> set;      // what this step changes (steps build on the ones before)
+};
+struct LessonDef {
+    std::string id, subject, title, blurb;
+    std::function<void(App&)> setup;        // rows, sliders and panes (pane 0 is the lesson text)
+    std::vector<LessonStep> steps;
+};
+const std::vector<LessonDef>& lessonLibrary();
+
+// Passed to a step's `set`: edits the step's target keyframe.
+struct StepCtx {
+    StepCtx(App& a, Keyframe& key) : app(a), k(key) {}
+    App& app;
+    Keyframe& k;
+    float dur = 1.4f;                       // transition length (seconds)
+    std::vector<std::string> play;          // sliders to sweep once the step has arrived
+    bool playSum = false;                   // run the summation player once arrived
+    std::string question, answer, hint;     // optional check; answer is an expression
+    double tol = 0.01;
+    KeyPane& pane(int i);
+    StepCtx& param(const std::string& name, double v);
+    StepCtx& fit(int pane, double x0, double x1, double y0, double y1);
+    StepCtx& show(int pane, std::vector<int> rows);  // these rows are visible, the rest hidden
+    StepCtx& active(int pane, int row);
+    StepCtx& matrix(int pane, double a, double b, double c, double d);
+    StepCtx& ask(const std::string& q, const std::string& ans, const std::string& hintText = "", double tolerance = 0.01);
+};
 struct DemoPane;
 
 class App {
@@ -496,6 +550,7 @@ public:
     Keyframe captureKeyframe(double t);
     void addKeyframe();
     void applyTimeline(double t, bool animate);
+    void applyKeys(const std::vector<Keyframe>& keys, double t, bool animate);
     void updateTimeline(float dt);  // advances / applies the playhead; called from frame()
     void drawTimeline();
     void startExport();
@@ -544,6 +599,44 @@ public:
     void drawFractalOverlay(ImDrawList* dl);  // Julia-constant marker and the orbit under the cursor
     void setFractal(bool on, bool julia);
     void drawFractalSection();
+
+    // ---- lessons (lesson.cpp)
+    int lessonIdx_ = -1, lessonStep_ = 0;
+    bool lessonPending_ = false;            // go to the first step once the window size is known
+    Keyframe lessonBase_;                   // state right after the lesson's setup
+    std::vector<Keyframe> lessonKeys_;      // the transition being played
+    double lessonT_ = 0;
+    bool lessonPlaying_ = false;
+    std::vector<std::string> lessonPlay_;
+    bool lessonPlaySum_ = false;
+    std::string lessonQ_, lessonAns_, lessonHint_;
+    double lessonTol_ = 0.01;
+    char lessonInput_[96] = "";
+    int lessonResult_ = 0;                  // 1 right, -1 wrong
+    bool lessonShowHint_ = false, lessonFocusInput_ = false;
+    std::map<std::string, int> lessonProgress_;  // furthest step reached, by lesson id (settings file)
+    float lessonBarH() const;
+    void startLesson(int idx);
+    void lessonGo(int step, bool animate);
+    void updateLesson(float dt);
+    void drawLessonBar();
+    void drawLessonLibrary();
+    void exitLesson();
+    void lessonCheck();
+    void lessonLayout(int graphs, bool stacked, float noteFrac);
+
+    // ---- teaching overlays (overlays.cpp)
+    double paneScalar(const std::string& src) const;  // number or expression in the sliders (NaN if invalid)
+    void paneParamNames(std::set<std::string>& names) const;  // sliders panes need that no row uses
+    double thetaValue() const;
+    void setTheta(double v);
+    void effMatrix(double m[4]) const;  // the matrix as currently drawn (animating from the identity)
+    void drawShade(ImDrawList* dl);
+    void drawTrace(ImDrawList* dl);
+    void drawUnitCircle(ImDrawList* dl);
+    void drawMatrixScene(ImDrawList* dl);
+    bool overlayMouse(ImVec2 m, bool clicked);  // true when a handle owns the mouse
+    void drawOverlaySection();
 
     // ---- 3D (scene3d.cpp)
     void drawScene3D(ImDrawList* dl);

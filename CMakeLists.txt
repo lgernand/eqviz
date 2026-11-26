@@ -62,6 +62,9 @@ add_executable(eqviz
   src/demo_notes.cpp
   src/timeline.cpp
   src/fractal.cpp
+  src/overlays.cpp
+  src/lesson.cpp
+  src/lessons_content.cpp
   src/expr.cpp
   src/typeset.cpp)
 if(APPLE)
