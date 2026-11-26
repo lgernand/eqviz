@@ -224,7 +224,10 @@ void App::drawTrace(ImDrawList* dl) {
         label(dl, ts::text(ts::fmtNum(y, 4), s), ImVec2(p.x + 10, p.y - 8), col(d.color));
     }
     const float ay = std::clamp(view_.w2s(0, 0).y, canvasMin_.y + 30, canvasMax_.y - 40);
-    ts::Box b = ts::hcat({exprBox(trace_, s * 1.1f), ts::binop("=", s * 1.1f), ts::text(ts::fmtNum(a, 4), s * 1.1f)});
+    std::set<std::string> vars;
+    if (eq::ParseResult pr = eq::parse(trace_); pr.root) eq::freeVars(pr.root, vars);
+    ts::Box lhs = vars.empty() ? ts::ident("x", s * 1.1f) : exprBox(trace_, s * 1.1f);  // a fixed number reads x = 3
+    ts::Box b = ts::hcat({lhs, ts::binop("=", s * 1.1f), ts::text(ts::fmtNum(a, 4), s * 1.1f)});
     label(dl, b, ImVec2(top.x + 8, ay + 34), col(WHITE));
 }
 

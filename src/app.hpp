@@ -340,12 +340,25 @@ struct LessonStep {
     std::string title, text;                // text: note markup (headings, bullets, $maths$)
     std::function<void(StepCtx&)> set;      // what this step changes (steps build on the ones before)
 };
+// A question in the test at the end of a lesson: a typed answer (an expression) or multiple choice.
+struct TestQuestion {
+    std::string text;                       // note markup, shown in the lesson pane
+    std::string answer;                     // typed: the expected value, as an expression
+    std::vector<std::string> choices;       // multiple choice (note markup); then `correct` is the index
+    int correct = -1;
+    double tol = 0.01;
+    int review = -1;                        // step to revisit if this one is missed
+    std::function<void(StepCtx&)> set;      // the picture for this question (applied after every step)
+};
 struct LessonDef {
     std::string id, subject, title, blurb;
     std::function<void(App&)> setup;        // rows, sliders and panes (pane 0 is the lesson text)
     std::vector<LessonStep> steps;
+    std::vector<TestQuestion> test;         // the end-of-lesson test
 };
 const std::vector<LessonDef>& lessonLibrary();
+std::vector<TestQuestion> lessonTests(const std::string& id);  // tests for the built-in lessons (lesson_tests.cpp)
+std::vector<LessonDef> millenniumLessons();                     // lessons_millennium.cpp
 
 // Passed to a step's `set`: edits the step's target keyframe.
 struct StepCtx {
@@ -615,6 +628,18 @@ public:
     int lessonResult_ = 0;                  // 1 right, -1 wrong
     bool lessonShowHint_ = false, lessonFocusInput_ = false;
     std::map<std::string, int> lessonProgress_;  // furthest step reached, by lesson id (settings file)
+    // the end-of-lesson test
+    bool testing_ = false, testDone_ = false;
+    int testQ_ = 0, testPicked_ = -1;
+    std::vector<int> testRes_;              // per question: 0 unanswered, 1 right, -1 wrong
+    std::map<std::string, std::pair<int, int>> lessonTestBest_;  // best score / questions, by lesson id
+    void startTest();
+    void testGo(int q, bool animate);
+    void testAnswer(int choice);            // choice index, or -1 for the typed answer
+    void finishTest();
+    Keyframe lessonTarget(int step, StepCtx* out, const std::function<void(StepCtx&)>* extra);
+    void lessonMoveTo(Keyframe to, float dur, bool animate);
+    void lessonText(const std::string& text);
     float lessonBarH() const;
     void startLesson(int idx);
     void lessonGo(int step, bool animate);

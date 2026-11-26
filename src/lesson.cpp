@@ -83,6 +83,7 @@ StepCtx& StepCtx::ask(const std::string& q, const std::string& ans, const std::s
 
 float App::lessonBarH() const {
     if (lessonIdx_ < 0 || exporting_) return 0.f;
+    if (testing_ && !testDone_) return 104.f;
     return lessonQ_.empty() ? 62.f : 104.f;
 }
 
@@ -146,58 +147,47 @@ void App::startLesson(int idx) {
 
 void App::exitLesson() {
     lessonIdx_ = -1;
+    testing_ = testDone_ = false;
     lessonPlaying_ = false;
     lessonQ_.clear();
 }
 
-void App::lessonGo(int step, bool animate) {
-    if (lessonIdx_ < 0) return;
+Keyframe App::lessonTarget(int step, StepCtx* out, const std::function<void(StepCtx&)>* extra) {
+    // the starting state with steps 0..step applied in order (and then `extra`, for a test question)
     const LessonDef& L = lessonLibrary()[lessonIdx_];
-    step = std::clamp(step, 0, (int)L.steps.size() - 1);
-    computePaneRects();
-
-    // target = the starting state with steps 0..step applied in order
     Keyframe to = lessonBase_;
-    float dur = 1.4f;
-    std::vector<std::string> play;
-    bool playSum = false;
-    std::string q, ans, hint;
-    double tol = 0.01;
-    for (int j = 0; j <= step; ++j) {
+    for (int j = 0; j <= step && j < (int)L.steps.size(); ++j) {
         StepCtx ctx{*this, to};
         if (L.steps[j].set) L.steps[j].set(ctx);
-        if (j == step) { dur = ctx.dur; play = ctx.play; playSum = ctx.playSum; q = ctx.question; ans = ctx.answer; hint = ctx.hint; tol = ctx.tol; }
+        if (j == step && out && !extra) {
+            out->dur = ctx.dur; out->play = ctx.play; out->playSum = ctx.playSum;
+            out->question = ctx.question; out->answer = ctx.answer; out->hint = ctx.hint; out->tol = ctx.tol;
+        }
+    }
+    if (extra && *extra) {
+        StepCtx ctx{*this, to};
+        (*extra)(ctx);
+        if (out) { out->dur = ctx.dur; out->play = ctx.play; out->playSum = ctx.playSum; }
     }
     for (KeyPane& p : to.panes) p.noteScroll = 0;
     to.sumPos = -1;  // the summation player shows the whole sum unless a step plays it
-    sumShowAll_ = true;
+    return to;
+}
 
-    // the text
+void App::lessonText(const std::string& text) {
     const int keep = cur_;
     enterPane(0);
     if (isNote_) {
-        noteText_ = "# " + L.steps[step].title + "\n\n" + L.steps[step].text;
+        noteText_ = text;
         noteScroll_ = 0;
     }
     enterPane(keep);
+}
 
-    lessonStep_ = step;
-    lessonQ_ = q;
-    lessonAns_ = ans;
-    lessonHint_ = hint;
-    lessonTol_ = tol;
-    lessonInput_[0] = 0;
-    lessonResult_ = 0;
-    lessonShowHint_ = false;
-    lessonPlay_ = play;
-    lessonPlaySum_ = playSum;
+void App::lessonMoveTo(Keyframe to, float dur, bool animate) {
+    sumShowAll_ = true;
     sumPlaying_ = false;
     for (Param& p : params_) p.playing = false;
-    {
-        int& best = lessonProgress_[L.id];
-        if (step + 1 > best) { best = step + 1; saveSettings(); }
-    }
-
     if (!animate) {
         to.t = 0;
         applyKeys({to}, 0, false);
@@ -225,6 +215,113 @@ void App::lessonGo(int step, bool animate) {
     lessonKeys_ = {from, to};
     lessonT_ = 0;
     lessonPlaying_ = true;
+}
+
+void App::lessonGo(int step, bool animate) {
+    if (lessonIdx_ < 0) return;
+    const LessonDef& L = lessonLibrary()[lessonIdx_];
+    step = std::clamp(step, 0, (int)L.steps.size() - 1);
+    testing_ = testDone_ = false;
+    computePaneRects();
+    StepCtx out{*this, lessonBase_};
+    Keyframe to = lessonTarget(step, &out, nullptr);
+    lessonText("# " + L.steps[step].title + "\n\n" + L.steps[step].text);
+    lessonStep_ = step;
+    lessonQ_ = out.question;
+    lessonAns_ = out.answer;
+    lessonHint_ = out.hint;
+    lessonTol_ = out.tol;
+    lessonInput_[0] = 0;
+    lessonResult_ = 0;
+    lessonShowHint_ = false;
+    lessonPlay_ = out.play;
+    lessonPlaySum_ = out.playSum;
+    {
+        int& best = lessonProgress_[L.id];
+        if (step + 1 > best) { best = step + 1; saveSettings(); }
+    }
+    lessonMoveTo(to, out.dur, animate);
+}
+
+// ------------------------------------------------------------------ the test
+
+void App::startTest() {
+    if (lessonIdx_ < 0) return;
+    const LessonDef& L = lessonLibrary()[lessonIdx_];
+    if (L.test.empty()) return;
+    testing_ = true;
+    testDone_ = false;
+    testRes_.assign(L.test.size(), 0);
+    testGo(0, true);
+}
+
+void App::testGo(int q, bool animate) {
+    const LessonDef& L = lessonLibrary()[lessonIdx_];
+    q = std::clamp(q, 0, (int)L.test.size() - 1);
+    testQ_ = q;
+    testPicked_ = -1;
+    lessonInput_[0] = 0;
+    lessonResult_ = 0;
+    lessonQ_.clear();
+    lessonFocusInput_ = L.test[q].choices.empty();
+    computePaneRects();
+    StepCtx out{*this, lessonBase_};
+    Keyframe to = lessonTarget((int)L.steps.size() - 1, &out, &L.test[q].set);
+    std::string text = "# Test \xC2\xB7 question " + std::to_string(q + 1) + " of " + std::to_string(L.test.size()) + "\n\n" + L.test[q].text;
+    if (!L.test[q].choices.empty()) {
+        text += "\n\n";
+        for (size_t c = 0; c < L.test[q].choices.size(); ++c)
+            text += "- **" + std::string(1, (char)('A' + c)) + ".** " + L.test[q].choices[c] + "\n";
+    }
+    lessonText(text);
+    lessonPlay_ = out.play;
+    lessonPlaySum_ = out.playSum;
+    lessonMoveTo(to, out.dur, animate);
+}
+
+void App::testAnswer(int choice) {
+    const LessonDef& L = lessonLibrary()[lessonIdx_];
+    const TestQuestion& t = L.test[testQ_];
+    if (testRes_[testQ_] != 0) return;  // the first answer counts
+    if (!t.choices.empty()) {
+        if (choice < 0) return;
+        testPicked_ = choice;
+        testRes_[testQ_] = choice == t.correct ? 1 : -1;
+        return;
+    }
+    const double want = paneScalar(t.answer), got = paneScalar(lessonInput_);
+    if (!std::isfinite(got)) { lessonResult_ = -2; return; }  // unreadable: doesn't count as an attempt
+    lessonResult_ = 0;
+    testRes_[testQ_] = std::fabs(got - want) <= t.tol * std::max(1.0, std::fabs(want)) ? 1 : -1;
+}
+
+void App::finishTest() {
+    const LessonDef& L = lessonLibrary()[lessonIdx_];
+    testDone_ = true;
+    int score = 0;
+    for (int r : testRes_) score += r == 1;
+    const int n = (int)L.test.size();
+    auto& best = lessonTestBest_[L.id];
+    if (best.second != n) best = {score, n};
+    else best.first = std::max(best.first, score);
+    saveSettings();
+    std::string text = "# Test results\n\n";
+    text += "**You scored " + std::to_string(score) + " out of " + std::to_string(n) + ".** ";
+    text += score == n ? "Every answer right. Well done!" : score * 5 >= n * 4 ? "A pass: well done." : "Have another look at the steps below, then try again.";
+    text += "\n\n";
+    for (int i = 0; i < n; ++i) {
+        const TestQuestion& t = L.test[i];
+        std::string first = t.text.substr(0, t.text.find('\n'));
+        if (first.size() > 140) first = first.substr(0, 137) + "\xE2\x80\xA6";
+        text += "- " + std::string(testRes_[i] == 1 ? "\xE2\x9C\x93 " : "\xC3\x97 ") + first;
+        if (testRes_[i] != 1) {
+            if (!t.choices.empty() && t.correct >= 0) text += " **Answer: " + std::string(1, (char)('A' + t.correct)) + ".**";
+            else if (!t.answer.empty()) text += " **Answer:** $" + t.answer + "$.";
+            if (t.review >= 0 && t.review < (int)L.steps.size()) text += " Review step " + std::to_string(t.review + 1) + ", " + L.steps[t.review].title + ".";
+        }
+        text += "\n";
+    }
+    lessonText(text);
 }
 
 void App::updateLesson(float dt) {
@@ -288,6 +385,126 @@ void App::drawLessonBar() {
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, mixv(BG, BLUE_C, 0.68f));
     };
 
+    if (testing_) {  // ---------------- the end-of-lesson test
+        int act = 0;  // 1 next question, 2 results, 3 retry, 4 back to the lesson, 5 next lesson, 6 exit
+        const int nq = (int)L.test.size();
+        int nextLesson = -1;
+        for (int i = lessonIdx_ + 1; i < (int)lessonLibrary().size(); ++i)
+            if (lessonLibrary()[i].subject == L.subject) { nextLesson = i; break; }
+        ImGui::AlignTextToFramePadding();
+        ImGui::PushFont(fonts_.uiBold, 15.f);
+        ImGui::TextColored(colv(GOLD_C), testDone_ ? "TEST RESULTS" : "TEST");
+        ImGui::PopFont();
+        ImGui::SameLine(0, 12);
+        {   // one square per question: green right, red wrong, outline unanswered
+            const float sz = 11.f, gap = 6.f, fh = ImGui::GetFrameHeight();
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            for (int i = 0; i < nq; ++i) {
+                ImVec2 a(p.x + i * (sz + gap), p.y + (fh - sz) * 0.5f), b(a.x + sz, a.y + sz);
+                if (testRes_[i] == 1) dl->AddRectFilled(a, b, col(GREEN_C), 2.f);
+                else if (testRes_[i] == -1) dl->AddRectFilled(a, b, col(RED_C), 2.f);
+                else dl->AddRect(a, b, col(WHITE, i == testQ_ && !testDone_ ? 0.9f : 0.35f), 2.f, 1.5f, 0);
+            }
+            ImGui::Dummy(ImVec2(nq * (sz + gap), fh));
+        }
+        ImGui::SameLine(0, 10);
+        ImGui::AlignTextToFramePadding();
+        int score = 0;
+        for (int r : testRes_) score += r == 1;
+        if (testDone_) ImGui::TextDisabled("%s  \xC2\xB7  %d / %d correct", L.title.c_str(), score, nq);
+        else ImGui::TextDisabled("%s  \xC2\xB7  question %d of %d", L.title.c_str(), testQ_ + 1, nq);
+
+        const bool answered = !testDone_ && testRes_[testQ_] != 0;
+        float rightW = 64 + 8;
+        if (testDone_) rightW += 110 + 8 + 130 + 8 + (nextLesson >= 0 ? 150 + 8 : 0);
+        else rightW += 150 + 8 + 130 + 8;
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 12, w - 14 - rightW));
+        if (ImGui::Button("Back to lesson", ImVec2(130, 0))) act = 4;
+        ImGui::SameLine(0, 8);
+        if (testDone_) {
+            if (ImGui::Button("Retry test", ImVec2(110, 0))) act = 3;
+            if (nextLesson >= 0) {
+                ImGui::SameLine(0, 8);
+                accent(true);
+                if (ImGui::Button("Next lesson  \xE2\x96\xB6", ImVec2(150, 0))) act = 5;
+                ImGui::PopStyleColor(3);
+            }
+        } else {
+            ImGui::BeginDisabled(!answered);
+            accent(answered);
+            const bool lastQ = testQ_ == nq - 1;
+            if (ImGui::Button(lastQ ? "See results  \xE2\x96\xB6" : "Next question  \xE2\x96\xB6", ImVec2(150, 0))) act = lastQ ? 2 : 1;
+            if (answered) ImGui::PopStyleColor(3);
+            ImGui::EndDisabled();
+        }
+        ImGui::SameLine(0, 8);
+        if (ImGui::Button("Exit", ImVec2(64, 0))) act = 6;
+
+        if (!testDone_) {  // answer row
+            const TestQuestion& t = L.test[testQ_];
+            ImGui::Spacing();
+            if (!t.choices.empty()) {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Choose:");
+                for (int c = 0; c < (int)t.choices.size(); ++c) {
+                    ImGui::SameLine(0, 8);
+                    const bool isRight = c == t.correct, picked = c == testPicked_;
+                    int pushed = 0;
+                    if (answered && (isRight || picked)) {
+                        const int hue = isRight ? GREEN_C : RED_C;
+                        ImGui::PushStyleColor(ImGuiCol_Button, mixv(BG, hue, 0.5f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, mixv(BG, hue, 0.5f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, mixv(BG, hue, 0.5f));
+                        pushed = 3;
+                    }
+                    char lab[8];
+                    std::snprintf(lab, sizeof lab, "  %c  ", 'A' + c);
+                    ImGui::PushID(c);
+                    if (ImGui::Button(lab) && !answered) testAnswer(c);
+                    ImGui::PopID();
+                    if (pushed) ImGui::PopStyleColor(pushed);
+                }
+            } else {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Your answer:");
+                ImGui::SameLine(0, 10);
+                ImGui::SetNextItemWidth(160);
+                if (lessonFocusInput_) { ImGui::SetKeyboardFocusHere(); lessonFocusInput_ = false; }
+                ImGui::BeginDisabled(answered);
+                if (ImGui::InputTextWithHint("##tans", "number or expression", lessonInput_, sizeof lessonInput_,
+                                             ImGuiInputTextFlags_EnterReturnsTrue))
+                    testAnswer(-1);
+                ImGui::SameLine(0, 6);
+                if (ImGui::Button("Submit")) testAnswer(-1);
+                ImGui::EndDisabled();
+            }
+            ImGui::SameLine(0, 14);
+            if (testRes_[testQ_] == 1) ImGui::TextColored(colv(GREEN_C), "\xE2\x9C\x93  Correct!");
+            else if (testRes_[testQ_] == -1) {
+                if (!t.choices.empty()) ImGui::TextColored(colv(RED_C), "Not this time: the answer is %c.", 'A' + t.correct);
+                else ImGui::TextColored(colv(RED_C), "Not this time: the answer is %s.", t.answer.c_str());
+                if (t.review >= 0 && t.review < n) {
+                    ImGui::SameLine(0, 10);
+                    ImGui::TextDisabled("(review step %d, %s)", t.review + 1, L.steps[t.review].title.c_str());
+                }
+            } else if (lessonResult_ == -2) ImGui::TextColored(colv(RED_C), "That isn't a number or expression I can read.");
+            else ImGui::TextDisabled("Your first answer counts.");
+        }
+        ImGui::PopFont();
+        ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
+        switch (act) {
+            case 1: testGo(testQ_ + 1, true); break;
+            case 2: finishTest(); break;
+            case 3: startTest(); break;
+            case 4: lessonGo((int)L.steps.size() - 1, true); break;
+            case 5: startLesson(nextLesson); break;
+            case 6: exitLesson(); break;
+        }
+        return;
+    }
+
     ImGui::BeginDisabled(lessonStep_ == 0);
     if (ImGui::Button("\xE2\x97\x80  Back", ImVec2(86, 0))) lessonGo(lessonStep_ - 1, true);
     ImGui::EndDisabled();
@@ -326,11 +543,14 @@ void App::drawLessonBar() {
         for (int i = lessonIdx_ + 1; i < (int)lib.size(); ++i)
             if (lib[i].subject == L.subject) { nextLesson = i; break; }
     }
-    const float nextW = last ? (nextLesson >= 0 ? 150.f : 96.f) : 96.f;
+    const bool hasTest = !L.test.empty();
+    const float nextW = last ? (hasTest || nextLesson >= 0 ? 150.f : 96.f) : 96.f;
     ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 12, w - 14 - nextW - 8 - 64));
     accent(true);
     if (!last) {
         if (ImGui::Button("Next  \xE2\x96\xB6", ImVec2(nextW, 0))) lessonGo(lessonStep_ + 1, true);
+    } else if (hasTest) {
+        if (ImGui::Button("Take the test  \xE2\x96\xB6", ImVec2(nextW, 0))) startTest();
     } else if (nextLesson >= 0) {
         if (ImGui::Button("Next lesson  \xE2\x96\xB6", ImVec2(nextW, 0))) { ImGui::PopStyleColor(3); startLesson(nextLesson); ImGui::PopFont(); ImGui::End(); ImGui::PopStyleColor(); ImGui::PopStyleVar(2); return; }
     } else {
@@ -396,16 +616,22 @@ void App::drawLessonLibrary() {
         }
         const int best = lessonProgress_.count(L.id) ? lessonProgress_.at(L.id) : 0;
         const int n = (int)L.steps.size();
-        char right[32];
-        if (best >= n) std::snprintf(right, sizeof right, "\xE2\x9C\x93");
+        char right[48];
+        bool done = false;
+        const auto tb = lessonTestBest_.find(L.id);
+        if (tb != lessonTestBest_.end() && tb->second.second > 0) {
+            done = tb->second.first * 5 >= tb->second.second * 4;  // 80% passes
+            std::snprintf(right, sizeof right, "%stest %d/%d", done ? "\xE2\x9C\x93 " : "", tb->second.first, tb->second.second);
+        } else if (best >= n) std::snprintf(right, sizeof right, L.test.empty() ? "\xE2\x9C\x93" : "test to take");
         else if (best > 0) std::snprintf(right, sizeof right, "%d / %d", best, n);
         else std::snprintf(right, sizeof right, "%d steps", n);
+        if (L.test.empty() && best >= n) done = true;
         ImGui::PushID(i);
         const float wAvail = 380.f;
         if (ImGui::Selectable(L.title.c_str(), lessonIdx_ == i, 0, ImVec2(wAvail, 0))) startLesson(i);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L.blurb.c_str());
         ImGui::SameLine(wAvail - ImGui::CalcTextSize(right).x);
-        if (best >= n) ImGui::TextColored(colv(GREEN_C), "%s", right);
+        if (done) ImGui::TextColored(colv(GREEN_C), "%s", right);
         else ImGui::TextDisabled("%s", right);
         ImGui::PopID();
     }

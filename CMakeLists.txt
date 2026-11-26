@@ -65,6 +65,8 @@ add_executable(eqviz
   src/overlays.cpp
   src/lesson.cpp
   src/lessons_content.cpp
+  src/lesson_tests.cpp
+  src/lessons_millennium.cpp
   src/expr.cpp
   src/typeset.cpp)
 if(APPLE)

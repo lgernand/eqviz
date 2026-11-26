@@ -89,7 +89,7 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
 
 ## Lessons
 
-**Lessons** (the button under the project name) teaches with live graphs. Each lesson puts its explanation in a
+**Lessons** (the button under the project name) teaches trigonometry, calculus, linear algebra and the Millennium Prize Problems with live graphs. Each lesson puts its explanation in a
 pane on the left. Every step moves the graphs into place with smooth transitions: sliders sweep, matrices morph,
 and curves appear. Many steps end with a **Check yourself** question. Answers can be numbers or expressions, such
 as `0.5`, `sqrt(3)/2` or `2pi/3`, and come with hints. Move between steps with **Back** and **Next**, with
@@ -101,6 +101,17 @@ as `0.5`, `sqrt(3)/2` or `2pi/3`, and come with hints. Move between steps with *
   the fundamental theorem, and Taylor series.
 - **Linear algebra:** vectors and combinations, matrices as transformations, the determinant, solving Mx = b,
   and eigenvectors.
+- **Millennium Prize Problems:** one lesson per problem. The Riemann Hypothesis (primes rebuilt from zeta zeros),
+  P vs NP (polynomial against exponential time), Navier–Stokes (exact flows, decay, and the blow-up question),
+  Yang–Mills and the mass gap (range, energy gaps, confinement), the Hodge conjecture (varieties, holes and Hodge
+  classes), the Poincaré conjecture (Ricci flow with surgery) and Birch and Swinnerton-Dyer (rank and counting
+  points mod p).
+
+**Tests.** Every lesson ends with a short test: **Take the test** on the last step. The questions mix typed
+answers and multiple choice, and some set up their own picture. Your first answer to each question counts. A
+wrong answer shows the right one and the step to review. The results screen lists every question with its
+answer, and offers **Retry test** and **Next lesson**. Your best score is saved, and the lesson list marks
+lessons passed with 80% or more.
 
 The lessons use four teaching tools. You can also turn them on yourself for any real-axes pane, in the panel's
 **Graph** section:
@@ -250,7 +261,7 @@ and has two or more keyframes).
 | `src/themes.cpp`, `src/fonts.cpp`, `src/appearance.cpp` | colour themes, font choices, Appearance section and settings |
 | `src/notes.cpp`, `src/demo_notes.cpp` | note panes (markup, layout, editor) and the demos' explanations |
 | `src/timeline.cpp`, `src/video*` | keyframes, playback, timeline strip; MP4 writer (AVFoundation) |
-| `src/lesson.cpp`, `src/lessons_content.cpp` | lesson engine (steps, transitions, questions, progress, lesson bar) and the lessons |
+| `src/lesson.cpp`, `src/lessons_content.cpp`, `src/lessons_millennium.cpp`, `src/lesson_tests.cpp` | lesson engine (steps, transitions, questions, tests, progress) and the lessons |
 | `src/overlays.cpp` | unit circle, matrix transformation, trace line and shaded area |
 | `src/fractal.cpp` | fractal mode: escape-time iteration, CPU double-precision renderer, orbits, panel section |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |

@@ -877,10 +877,16 @@ LessonDef laEigen() {
 }  // namespace
 
 const std::vector<LessonDef>& lessonLibrary() {
-    static const std::vector<LessonDef> lib = {
-        trigCircle(),  trigWaves(),      trigTan(),      trigTransform(),
-        calcLimits(),  calcDerivative(), calcShape(),    calcIntegral(), calcFTC(), calcTaylor(),
-        laVectors(),   laTransform(),    laDeterminant(), laSystems(),   laEigen(),
-    };
+    static const std::vector<LessonDef> lib = [] {
+        std::vector<LessonDef> v = {
+            trigCircle(),  trigWaves(),      trigTan(),      trigTransform(),
+            calcLimits(),  calcDerivative(), calcShape(),    calcIntegral(), calcFTC(), calcTaylor(),
+            laVectors(),   laTransform(),    laDeterminant(), laSystems(),   laEigen(),
+        };
+        for (LessonDef& m : millenniumLessons()) v.push_back(std::move(m));
+        for (LessonDef& L : v)
+            if (L.test.empty()) L.test = lessonTests(L.id);
+        return v;
+    }();
     return lib;
 }

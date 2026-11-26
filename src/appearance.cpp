@@ -89,6 +89,7 @@ void App::saveSettings() const {
     out << "text_scale\t" << textScale_ << "\n";
     out << "label_scale\t" << labelScale_ << "\n";
     for (const auto& [id, step] : lessonProgress_) out << "lesson\t" << id << "\t" << step << "\n";
+    for (const auto& [id, sc] : lessonTestBest_) out << "lessontest\t" << id << "\t" << sc.first << "\t" << sc.second << "\n";
 }
 
 void App::loadSettings() {
@@ -116,6 +117,7 @@ void App::loadSettings() {
             } else if (f[0] == "text_scale") textScale_ = std::clamp(std::stof(f[1]), 0.7f, 1.6f);
             else if (f[0] == "label_scale") labelScale_ = std::clamp(std::stof(f[1]), 0.5f, 2.f);
             else if (f[0] == "lesson" && f.size() > 2) lessonProgress_[f[1]] = std::stoi(f[2]);
+            else if (f[0] == "lessontest" && f.size() > 3) lessonTestBest_[f[1]] = {std::stoi(f[2]), std::stoi(f[3])};
         } catch (...) {
         }
     }

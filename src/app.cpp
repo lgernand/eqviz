@@ -642,7 +642,12 @@ void App::runScriptedActions() {
         size_t colon = item.find(':');
         if (colon == std::string::npos || std::atoi(item.c_str()) != frameNo_) continue;
         std::string a = item.substr(colon + 1);
-        if (a == "next") lessonGo(lessonStep_ + 1, true);
+        if (a == "test") startTest();
+        else if (a.rfind("tans", 0) == 0) { std::snprintf(lessonInput_, sizeof lessonInput_, "%s", a.c_str() + 4); testAnswer(-1); }
+        else if (a.rfind("tpick", 0) == 0) testAnswer(std::atoi(a.c_str() + 5));
+        else if (a == "tnext") testGo(testQ_ + 1, true);
+        else if (a == "tdone") finishTest();
+        else if (a == "next") lessonGo(lessonStep_ + 1, true);
         else if (a == "prev") lessonGo(lessonStep_ - 1, true);
         else if (a.rfind("lstep", 0) == 0) lessonGo(std::atoi(a.c_str() + 5), false);
         else if (a.rfind("ans", 0) == 0) { std::snprintf(lessonInput_, sizeof lessonInput_, "%s", a.c_str() + 3); lessonCheck(); }
@@ -930,7 +935,7 @@ void App::handleKeys() {  // keyboard shortcuts act on the focused pane (only wh
             if (ImGui::IsKeyPressed(ImGuiKey_Escape)) finishExport(true);
             return;
         }
-        if (lessonIdx_ >= 0 && !lessonPlaying_) {
+        if (lessonIdx_ >= 0 && !lessonPlaying_ && !testing_) {
             const int n = (int)lessonLibrary()[lessonIdx_].steps.size();
             if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false) && lessonStep_ + 1 < n) lessonGo(lessonStep_ + 1, true);
             if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false) && lessonStep_ > 0) lessonGo(lessonStep_ - 1, true);
