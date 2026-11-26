@@ -189,13 +189,11 @@ void App::handleLayoutInput() {
     const float ww = extendWorkspace_ ? vw * std::max(1.f, wsW_) : vw;
     const float wh = extendWorkspace_ ? vh * std::max(1.f, wsH_) : vh;
 
-    // scroll the workspace: horizontal trackpad swipe, or Option + wheel for vertical
-    if (extendWorkspace_ && !io.WantCaptureMouse && inVisible(m)) {
-        if (io.MouseWheelH != 0) scroll_.x -= io.MouseWheelH * 40.f;
-        if (io.KeyAlt && io.MouseWheel != 0) {
-            scroll_.y -= io.MouseWheel * 40.f;
-            io.MouseWheel = 0;  // don't also zoom the pane
-        }
+    // scroll the workspace with two-finger trackpad scrolling (a mouse wheel zooms instead;
+    // with a mouse, use the scrollbars)
+    if (extendWorkspace_ && plat_.trackpad && !io.WantCaptureMouse && inVisible(m)) {
+        scroll_.x -= plat_.scrollX;
+        scroll_.y -= plat_.scrollY;
     }
 
     // scrollbars

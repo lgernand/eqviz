@@ -54,6 +54,13 @@ add_executable(eqviz
   src/layout.cpp
   src/expr.cpp
   src/typeset.cpp)
+if(APPLE)
+  enable_language(OBJCXX)
+  target_sources(eqviz PRIVATE src/platform_mac.mm)
+  target_link_libraries(eqviz PRIVATE "-framework Cocoa")
+else()
+  target_sources(eqviz PRIVATE src/platform_stub.cpp)
+endif()
 target_link_libraries(eqviz PRIVATE imgui Threads::Threads)
 if(APPLE)
   target_compile_definitions(eqviz PRIVATE GL_SILENCE_DEPRECATION)

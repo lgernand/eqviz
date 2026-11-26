@@ -160,6 +160,9 @@ void App::frame(float dt) {
     ImVec2 ds = io.DisplaySize;
     panelW_ = std::min(390.f, std::max(300.f, ds.x * 0.3f));
     computePaneRects();
+    enterPane(focus_);
+    ++frameNo_;
+    if (!opt_.actions.empty()) runScriptedActions();
     handleLayoutInput();
 
     // clicking a pane focuses it (the panel edits the focused pane)
@@ -177,8 +180,6 @@ void App::frame(float dt) {
             sumPlaying_ = false;
         }
     }
-    ++frameNo_;
-    if (!opt_.actions.empty()) runScriptedActions();
     handleKeys();
 
     // shared animations: parameter sweeps and the sum player
@@ -577,6 +578,11 @@ void App::runScriptedActions() {
         else if (a == "aU") addPane(kAbove);
         else if (a == "aD") addPane(kBelow);
         else if (a == "x") closePane(focus_);
+        else if (!a.empty() && a[0] == 'P') plat_.magnify += (float)std::atof(a.c_str() + 1);
+        else if (!a.empty() && a[0] == 'S') {
+            float dx = 0, dy = 0;
+            if (std::sscanf(a.c_str() + 1, "%f;%f", &dx, &dy) == 2) { plat_.trackpad = true; plat_.scrollX += dx; plat_.scrollY += dy; }
+        }
         else if (a == "W") { extendWorkspace_ = true; wsW_ = 2.f; }
         else if (!a.empty() && a[0] == 'f') focus_ = std::clamp(std::atoi(a.c_str() + 1), 0, (int)panes_.size() - 1);
         else if (!a.empty() && a[0] == 'Z') {  // Zx;y;scale : jump the view (zoom testing)
@@ -630,11 +636,27 @@ void App::handleInput(float dt) {
             view_.cy += io.MouseDelta.y / view_.yscale();
             if (zooming_) view_.s2w(zoomAnchorS_, zoomAnchorX_, zoomAnchorY_);
         }
-        if (overCanvas && io.MouseWheel != 0) {
+        // zoom: a mouse wheel, or a trackpad pinch (trackpad scrolling never zooms)
+        double zoomBy = 1;
+        if (overCanvas && io.MouseWheel != 0 && !plat_.trackpad) zoomBy *= std::pow(1.15, (double)io.MouseWheel);
+        if (overCanvas && plat_.magnify != 0) zoomBy *= std::max(0.2, 1.0 + plat_.magnify);
+        if (zoomBy != 1) {
             zoomAnchorS_ = m;
             view_.s2w(m, zoomAnchorX_, zoomAnchorY_);
-            targetScale_ = std::clamp(targetScale_ * std::pow(1.15, (double)io.MouseWheel), 1.0, 50000.0);
+            targetScale_ = std::clamp(targetScale_ * zoomBy, 1.0, 50000.0);
+            if (plat_.magnify != 0 && io.MouseWheel == 0) {  // pinches track the fingers directly
+                view_.scale = targetScale_;
+                ImVec2 c = view_.center();
+                view_.cx = zoomAnchorX_ - (zoomAnchorS_.x - c.x) / view_.scale;
+                view_.cy = zoomAnchorY_ + (zoomAnchorS_.y - c.y) / view_.yscale();
+            }
             zooming_ = true;
+        }
+        // two-finger trackpad scroll pans the pane (when the workspace itself can't scroll)
+        if (overCanvas && plat_.trackpad && !extendWorkspace_ && (plat_.scrollX != 0 || plat_.scrollY != 0)) {
+            view_.cx -= plat_.scrollX / view_.scale;
+            view_.cy += plat_.scrollY / view_.yscale();
+            if (zooming_) view_.s2w(zoomAnchorS_, zoomAnchorX_, zoomAnchorY_);
         }
         if (zooming_) {
             double k = 1 - std::exp(-dt * 14.0);
@@ -661,8 +683,17 @@ void App::handleInput(float dt) {
                 cam_.s.target = cam_.s.target - cam_.right * (io.MouseDelta.x * k) + f * (io.MouseDelta.y * k);
             }
         }
-        if (overCanvas && io.MouseWheel != 0)
+        if (overCanvas && io.MouseWheel != 0 && !plat_.trackpad)
             targetDist_ = std::clamp(targetDist_ * std::pow(0.88, (double)io.MouseWheel), 0.5, 2000.0);
+        if (overCanvas && plat_.magnify != 0) {
+            targetDist_ = std::clamp(targetDist_ / std::max(0.2, 1.0 + plat_.magnify), 0.5, 2000.0);
+            cam_.s.dist = targetDist_;
+        }
+        if (overCanvas && plat_.trackpad && !extendWorkspace_ && (plat_.scrollX != 0 || plat_.scrollY != 0)) {
+            double k = cam_.s.dist / cam_.focal;
+            Vec3 f = normalize(Vec3(cam_.fwd.x, cam_.fwd.y, 0));
+            cam_.s.target = cam_.s.target - cam_.right * (plat_.scrollX * k) + f * (plat_.scrollY * k);
+        }
         double k = 1 - std::exp(-dt * 12.0);
         cam_.s.dist = std::exp(std::log(cam_.s.dist) + (std::log(targetDist_) - std::log(cam_.s.dist)) * k);
         if (autoRotate_ && !orbiting_) cam_.s.theta += dt * 0.16;

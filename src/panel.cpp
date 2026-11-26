@@ -211,7 +211,7 @@ void App::drawPanel() {
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::PushFont(nullptr, 12.5f);
         ImGui::TextWrapped("%s%s", panes_.size() > 1 ? "Click a pane to edit it; drag the gaps between panes to resize. " : "",
-                           extendWorkspace_ ? "Scroll with the scrollbars, a sideways swipe, or Option + scroll." : "");
+                           extendWorkspace_ ? "Scroll with two fingers on a trackpad, or click and drag the scrollbars." : "");
         ImGui::PopFont();
         ImGui::PopStyleColor();
     }
@@ -414,8 +414,10 @@ void App::drawPanel() {
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::PushFont(nullptr, 13.f);
     ImGui::PushTextWrapPos(0);
-    ImGui::TextUnformatted(threeD_ ? "Drag to pan \xC2\xB7 right-drag to orbit \xC2\xB7 scroll to zoom \xC2\xB7 hover for coordinates"
-                                   : "Drag to pan \xC2\xB7 scroll to zoom \xC2\xB7 hover a curve for coordinates");
+    ImGui::TextUnformatted(threeD_ ? "Drag to pan \xC2\xB7 right-drag to orbit \xC2\xB7 pinch or mouse wheel to zoom \xC2\xB7 "
+                                     "hover for coordinates"
+                                   : "Drag or two-finger scroll to pan \xC2\xB7 pinch or mouse wheel to zoom \xC2\xB7 "
+                                     "hover a curve for coordinates");
     ImGui::TextUnformatted("Syntax: 2x, x^2, sin x, e^x, sqrt(x), |x|, n!, pi, i, "
                            "sum(k, 1, n, 1/k^2), prod(k, 1, n, ...), inf. Unknown letters become sliders.");
     ImGui::TextUnformatted("Keys: Space play sum \xC2\xB7 D derivative \xC2\xB7 C complex \xC2\xB7 3 toggle 3D \xC2\xB7 R reset");

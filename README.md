@@ -46,8 +46,8 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
 - **Multiple coordinate planes**: add panes to the left, right, top or bottom of the focused
   pane, close them, and drag the gaps between panes to resize. Each pane has its own mode
   (real or complex, 2D or 3D), view, main function and visible rows; click a pane to edit it.
-  Optionally the workspace can be larger than the window (up to 5× each way), with scrollbars,
-  a sideways swipe, or Option + scroll to move around.
+  Optionally the workspace can be larger than the window (up to 5× each way); scroll it with
+  two fingers on a trackpad or with the scrollbars.
 - **Riemann Hypothesis demo** (Project, then Open): on the left, ζ(z) transforming the
   complex plane; on the right, the prime staircase π₀(x), Riemann's
   smooth R(x), |ζ(½ + ix)| touching zero at each γₖ, and the explicit-formula curve
@@ -98,7 +98,13 @@ ad-hoc signed, so a copy sent to another Mac needs right-click, then Open, the f
 |---|---|---|
 | Left-drag | pan (or drag the tangent point) | pan |
 | Right-drag | | orbit |
-| Scroll | zoom about the cursor | zoom |
+| Two-finger scroll (trackpad) | pan, or scroll the workspace when it extends past the window | pan, or scroll the workspace |
+| Pinch (trackpad) | zoom about the cursor | zoom |
+| Mouse wheel | zoom about the cursor | zoom |
+| Scrollbars | click the track to page, drag the thumb to scroll | |
+
+On macOS the app reads native trackpad events to tell two-finger scrolling from a mouse wheel
+and to get pinch gestures (`src/platform_mac.mm`); on other platforms the wheel zooms.
 
 Keys (when not typing): `Space` play/pause the sum · `D` derivative · `C` real/complex ·
 `3` 2D/3D · `R` reset view.

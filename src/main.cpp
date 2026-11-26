@@ -269,6 +269,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    platformInstall();
     App app;
     app.init(fonts, opt);
 
@@ -283,6 +284,7 @@ int main(int argc, char** argv) {
         last = now;
 
         auto t0 = std::chrono::steady_clock::now();
+        app.plat_ = platformPoll();
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         if (opt.mouseX >= 0) io.AddMousePosEvent(opt.mouseX, opt.mouseY);

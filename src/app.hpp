@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "expr.hpp"
+#include "platform.hpp"
 #include "imgui.h"
 #include "typeset.hpp"
 
@@ -233,6 +234,8 @@ public:
     void init(const Fonts& f, const LaunchOptions& o);
     void frame(float dt);
     void shutdown();
+
+    PlatformInput plat_;  // native trackpad scroll / pinch for this frame (set by main)
 
     // ---- state (shared across app.cpp / panel.cpp / scene*.cpp)
     Fonts fonts_;
