@@ -12,7 +12,9 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   Each one has a ▶ button that sweeps it back and forth, and its range can be edited.
 - **Real axes ⇄ complex plane**: on the complex plane, `f(z)` is shown 3b1b-style as a grid
   being transformed by the function, with the real axis (yellow) and imaginary axis (red)
-  tracked. Domain colouring is optional. The input grid stays fixed while you zoom and pan,
+  tracked. Domain colouring is optional; on macOS it is rendered on the GPU at full
+  resolution (the expression is compiled to a GLSL shader), falling back to the CPU for
+  infinite series, number-theory functions, morphs and zoom depths beyond single precision. The input grid stays fixed while you zoom and pan,
   so zooming magnifies the transformed lines; use *Fit grid to view* or the spacing slider
   to rebuild it.
 - **2D ⇄ 3D**: an animated camera move tilts the plane up while the surface rises out of it.
@@ -145,6 +147,7 @@ Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum 
 | `src/scene2d.cpp` | number plane, adaptive curve sampling, warped complex grid, domain colouring |
 | `src/scene3d.cpp` | camera, surface meshes, painter's-algorithm depth sorting |
 | `src/panel.cpp` | control panel and on-canvas equation labels |
+| `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |
 | `src/app.*` | state, animations, input, mode transitions |
 | `tests/expr_test.cpp` | expression engine checks: `cmake --build build --target expr_test && ./build/expr_test` |

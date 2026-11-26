@@ -175,7 +175,8 @@ struct LaunchOptions {
     double sumPos = -1;
     int width = 1560, height = 940;
     std::string actions;
-    int bench = 0;        // testing: 1 = pan every pane each frame, 2 = zoom every pane each frame
+    int bench = 0;
+    bool noGpu = false;        // testing: 1 = pan every pane each frame, 2 = zoom every pane each frame
     std::string project;  // project file to open, or "demo:riemann" / "demo:poincare"
     float mouseX = -1, mouseY = -1;  // testing: fake cursor position
     float drag[5] = {-1, 0, 0, 0, 0};  // testing: x0, y0, x1, y1, start frame of a simulated drag  // testing: "frame:action,..." with action c | 3 | d | p | e<N>
@@ -256,7 +257,9 @@ public:
     void frame(float dt);
     void shutdown();
 
-    PlatformInput plat_;  // native trackpad scroll / pinch for this frame (set by main)
+    PlatformInput plat_;
+    bool useGpu_ = true;       // domain colouring on the GPU when the expression allows it
+    std::string gpuStatus_;    // why the last domain colouring ran on the CPU ("" = GPU)  // native trackpad scroll / pinch for this frame (set by main)
 
     // ---- state (shared across app.cpp / panel.cpp / scene*.cpp)
     Fonts fonts_;

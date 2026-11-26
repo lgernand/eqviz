@@ -410,6 +410,16 @@ void App::drawPanel() {
         if (domainColor_) {
             labelRow("Opacity", 110);
             ImGui::SliderFloat("##dco", &dcOpacity_, 0.1f, 1.f, "%.2f");
+            ImGui::Checkbox("Render on the GPU", &useGpu_);
+            ImGui::SetItemTooltip("Compile the function to a GPU shader for full-resolution colouring.\n"
+                                  "Falls back to the CPU when it can't (shown below).");
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            ImGui::PushFont(nullptr, 12.5f);
+            if (gpuStatus_.empty()) ImGui::TextUnformatted("on GPU");
+            else ImGui::Text("on CPU (%s)", gpuStatus_.c_str());
+            ImGui::PopFont();
+            ImGui::PopStyleColor();
         }
     } else {
         if (deriv_) {

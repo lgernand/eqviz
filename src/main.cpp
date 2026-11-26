@@ -180,6 +180,7 @@ int main(int argc, char** argv) {
         else if (a == "--actions") opt.actions = next();
         else if (a == "--project") opt.project = next();
         else if (a == "--bench") opt.bench = std::atoi(next().c_str());
+        else if (a == "--no-gpu") opt.noGpu = true;
         else if (a == "--render-icon") { renderIcon = next(); opt.width = opt.height = 512; }
         else if (a == "--mouse") std::sscanf(next().c_str(), "%f,%f", &opt.mouseX, &opt.mouseY);
         else if (a == "--drag") std::sscanf(next().c_str(), "%f,%f,%f,%f,%f", &opt.drag[0], &opt.drag[1], &opt.drag[2], &opt.drag[3], &opt.drag[4]);
@@ -303,6 +304,8 @@ int main(int argc, char** argv) {
         ImGui::Render();
         double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         cpuMs += ms;
+        double renderStart = 0;
+        if (opt.bench) renderStart = ms;
         if (frame > 60) frameMs.push_back(ms);  // skip start-up (fonts, sieve, zero table)
 
         int fw, fh;
@@ -311,6 +314,12 @@ int main(int argc, char** argv) {
         glClearColor(bg.x, bg.y, bg.z, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (opt.bench) {  // include GPU time: wait for the frame to finish rendering
+            glFinish();
+            double total = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            if (frame > 60 && !frameMs.empty()) frameMs.back() = total;
+            (void)renderStart;
+        }
 
         if (opt.frames > 0 && ++frame >= opt.frames) {
             if (!opt.shot.empty()) {

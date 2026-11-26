@@ -71,6 +71,7 @@ NodeP expandCalls(const NodeP& n, const FnTable& table, std::string& err);
 NodeP substitute(const NodeP& n, const std::map<std::string, NodeP>& repl);
 // Imaginary parts of the nontrivial zeros of zeta (computed once; 1-based k).
 double zetaZero(int k);
+const std::vector<double>& zetaBorweinWeights(int n);  // w_k = (d_k - d_n) / d_n, k = 0..n
 int zetaZeroCount();
 void warmZetaZeros();  // compute the table now (call from a background thread)
 

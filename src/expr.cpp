@@ -1639,3 +1639,7 @@ double primePi(double x) {
 }
 
 }  // namespace eq
+
+namespace eq {
+const std::vector<double>& zetaBorweinWeights(int n) { return borweinW(n); }
+}  // namespace eq

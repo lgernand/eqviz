@@ -5,6 +5,7 @@
 
 #include "app.hpp"
 #include "gl.hpp"
+#include "gpu.hpp"
 #include "theme.hpp"
 
 using namespace theme;
@@ -597,6 +598,42 @@ void App::drawComplexGrid(ImDrawList* dl, float alpha) {
 }
 
 void App::drawDomainColoring(ImDrawList* dl, float alpha) {
+    // GPU first: the expression is compiled to a fragment shader (single precision, which
+    // is plenty for colours). Fall back to the CPU for morphs, very deep zoom, very high
+    // zeta, or anything the shader generator can't express.
+    if (useGpu_) {
+        const eq::NodeP shown = (complex_ && deriv_ && dx_) ? dx_ : expr_;
+        double x0, y0, x1, y1;
+        view_.s2w(canvasMin_, x0, y1);
+        view_.s2w(canvasMax_, x1, y0);
+        const double extent = std::max({std::fabs(x0), std::fabs(x1), std::fabs(y0), std::fabs(y1), 1.0});
+        const double maxIm = std::max(std::fabs(y0), std::fabs(y1));
+        std::string reason;
+        if (morph_ < 1 && prev_.ok()) reason = "morphing";
+        else if (1.0 / view_.scale < 3e-6 * extent) reason = "zoomed in beyond single precision";
+        else if (maxIm > 85) reason = "zeta too far up the critical strip";
+        else if (params_.size() > 32) reason = "too many sliders";
+        if (reason.empty() && shown) {
+            gpu::DomainColorDraw d{};
+            d.cx = view_.cx; d.cy = view_.cy; d.scale = view_.scale; d.aspect = view_.aspect;
+            ImVec2 c = view_.center();
+            d.ccx = c.x; d.ccy = c.y;
+            d.alpha = alpha * dcOpacity_;
+            double lim = sumLimit();
+            d.sumLimit = std::isinf(lim) ? 1e30f : (float)lim;
+            d.zetaN = std::clamp((int)(22 + 1.3 * maxIm), 22, 128);
+            std::vector<std::string> names;
+            for (size_t i = 0; i < params_.size(); ++i) { names.push_back(params_[i].name); d.params[i] = (float)pvals_[i]; }
+            d.nParams = (int)params_.size();
+            if (gpu::drawDomainColoring(dl, shown, names, d)) { gpuStatus_.clear(); return; }
+            std::string why;
+            gpu::fragmentSource(shown, names, why);
+            reason = why.empty() ? "shader failed to compile" : "uses " + why;
+        }
+        gpuStatus_ = reason;
+    } else {
+        gpuStatus_ = "GPU off";
+    }
     const int down = hasSum_ ? 4 : 3;
     const int w = std::max(8, (int)((canvasMax_.x - canvasMin_.x) / down));
     const int h = std::max(8, (int)((canvasMax_.y - canvasMin_.y) / down));

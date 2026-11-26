@@ -6,6 +6,7 @@
 #include <set>
 
 #include "gl.hpp"
+#include "gpu.hpp"
 #include "theme.hpp"
 
 static const double PI = 3.14159265358979323846;
@@ -82,6 +83,7 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
     deriv_ = o.deriv;
     domainColor_ = o.domainColor;
     autoRotate_ = o.autoRotate;
+    useGpu_ = !o.noGpu && gpu::available();
     panes_.resize(1);
     cur_ = focus_ = 0;
     initPane();
@@ -103,6 +105,7 @@ void App::init(const Fonts& f, const LaunchOptions& o) {
 }
 
 void App::shutdown() {
+    gpu::shutdown();
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
         if (dcTex_) {
