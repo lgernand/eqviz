@@ -207,6 +207,19 @@ void App::drawPanel() {
     sectionHeader(panes_.size() > 1 ? "VIEW  \xC2\xB7  FOCUSED PANE" : "VIEW", fonts_.uiBold);
     {
         // panes: add next to the focused one, close it, let the workspace grow past the window
+        // what the next added pane is
+        {
+            float half = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
+            for (int k = 0; k < 2; ++k) {
+                if (k) ImGui::SameLine(0, 6);
+                const bool sel = addNoteNext_ == (k == 1);
+                if (sel) pushAccent(BLUE_C);
+                if (ImGui::Button(k ? "New panes: note" : "New panes: graph", ImVec2(half, 28))) addNoteNext_ = k == 1;
+                if (sel) ImGui::PopStyleColor(3);
+                ImGui::SetItemTooltip(k ? "Panes you add show explanatory text with typeset maths"
+                                        : "Panes you add show graphs");
+            }
+        }
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Add pane");
         ImGui::SameLine(84);
@@ -235,19 +248,27 @@ void App::drawPanel() {
             ImGui::SliderFloat("##wsw", &wsW_, 1.f, 5.f, "width %.1f\xC3\x97");
             ImGui::SameLine(0, 6);
             ImGui::SetNextItemWidth(half);
-            ImGui::SliderFloat("##wsh", &wsH_, 1.f, 5.f, "height %.1f\xC3\x97");
+            ImGui::SliderFloat("##wsh", &wsH_, 1.f, 12.f, "height %.1f\xC3\x97");
         }
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::PushFont(nullptr, 12.5f);
         ImGui::TextWrapped("%s%s", panes_.size() > 1 ? "Click a pane to edit it; drag the gaps between panes to resize. " : "",
-                           extendWorkspace_ ? "Scroll with two fingers on a trackpad, or click and drag the scrollbars." : "");
+                           extendWorkspace_ ? "Panes added above or below get a full window of height; drag a gap down to make "
+                                              "a pane taller than the window. Scroll with two fingers, or with the scrollbars."
+                                            : "Turn this on to stack tall panes and scroll down through them.");
         ImGui::PopFont();
         ImGui::PopStyleColor();
     }
+    if (isNote_) {
+        sectionHeader("NOTE", fonts_.uiBold);
+        drawNoteEditor();
+    }
+    if (!isNote_) {
     if (segmented("Real axes", "Complex plane", fadeStage_ ? pendingComplex_ : complex_, BLUE_C)) toggleComplex();
     bool showing3D = dimAnimating_ ? dimTo3D_ : threeD_;
     if (segmented("2D", "3D", showing3D, BLUE_C)) toggle3D();
-    {
+    }
+    if (!isNote_) {
         const char* lbl = deriv_ ? (complex_ ? "Showing f\xE2\x80\xB2(z)  \xC2\xB7  click to hide" : "Hide first derivative")
                                  : "Show first derivative  f\xE2\x80\xB2";
         if (deriv_) pushAccent(GREEN_C);
@@ -367,6 +388,7 @@ void App::drawPanel() {
     }
 
     // ---- mode specific options
+    if (!isNote_) {
     sectionHeader(threeD_ ? "SURFACE" : (complex_ ? "COMPLEX PLANE" : "GRAPH"), fonts_.uiBold);
     if (threeD_) {
         labelRow("Domain  \xC2\xB1R", 110);
@@ -452,6 +474,7 @@ void App::drawPanel() {
         if (ImGui::Button("1:1", ImVec2(bw11, 0))) view_.aspect = 1;
     }
     if (ImGui::Button("Reset view", ImVec2(-1, 32))) resetView();
+    }
 
     // ---- appearance
     sectionHeader("APPEARANCE", fonts_.uiBold);

@@ -224,6 +224,18 @@ using U32Vec = std::vector<uint32_t>;
 using IntVec = std::vector<int>;
 using CplxVec = std::vector<cplx>;
 
+// One laid-out piece of a note pane (positions relative to the text column; y is a baseline).
+struct NoteItem {
+    enum Kind { Text, Math, Rule, Dot } kind = Text;
+    float x = 0, y = 0, w = 0;
+    ImFont* font = nullptr;
+    float size = 0;
+    int role = 0;  // 0 body, 1 heading, 2 maths, 3 accent
+    std::string s;
+    ts::Box box;
+};
+using NoteItems = std::vector<NoteItem>;
+
 // Everything that belongs to one coordinate plane. App holds the current pane's
 // copy of these members; App::enterPane swaps panes in and out.
 #define EQVIZ_PANE_FIELDS(X)                                                                          \
@@ -251,6 +263,8 @@ using CplxVec = std::vector<cplx>;
     X(SumYsMap, sumYs_, {}) X(uint64_t, sumYsHash_, 0) X(IntSet, hiddenRows_, {}) X(RowCacheMap, rowCache_, {}) \
     X(bool, fitPending_, false) X(ImVec4, fitRange_, {}) X(bool, want3D_, false)                        \
     X(double, gridX0_, 0) X(double, gridX1_, 0) X(double, gridY0_, 0) X(double, gridY1_, 0) X(double, gridStep_, 0)               \
+    X(bool, isNote_, false) X(std::string, noteText_, {}) X(float, noteScroll_, 0.f) X(float, noteContentH_, 0.f) \
+    X(uint64_t, noteLayoutHash_, 0) X(NoteItems, noteItems_, {}) X(float, noteColW_, 0.f)                   \
     X(bool, lockZScale_, false) X(bool, fitZEveryFrame_, false) X(ColumnCache, activeCC_, {}) X(ColumnCache, derivCC_, {})            \
     X(double, lastScale_, 0) X(double, scaleChangeT_, -10) X(bool, zoomingNow_, false)                 \
     X(double, gridVcx_, 0) X(double, gridVcy_, 0) X(double, gridVscale_, 0) X(double, gridVw_, 0)      \
@@ -343,7 +357,7 @@ public:
     float dragGrab_ = 0;
     bool layoutBusy_ = false;              // a splitter or scrollbar owns the mouse this frame
     bool extendWorkspace_ = false;         // panes may extend past the window (scrollbars)
-    float wsW_ = 1.6f, wsH_ = 1.f;         // workspace size in multiples of the visible area
+    float wsW_ = 1.f, wsH_ = 1.f;         // workspace size in multiples of the visible area
     ImVec2 scroll_{0, 0};
     ImVec4 visRect_;                       // visible canvas area (right of the panel)
     void exchange(PaneState& p);
@@ -351,11 +365,23 @@ public:
     void setPanes(int count, int layout);  // default arrangement for count panes
     void addPane(Side side);    // split the focused pane
     void closePane(int i);
+    std::vector<float> paneHeights() const;  // current pixel height of each pane
+    float subtreeHeight(int node, const std::vector<float>& h) const;
+    void relayoutFromHeights(const std::vector<float>& h);  // keep these heights; grow the workspace to fit
     void computePaneRects();
     void layoutRects(int node, ImVec4 r);
     void handleLayoutInput();
     void drawLayoutChrome(ImDrawList* dl);
     void drawRotateControl(int pane);
+    // note panes (notes.cpp)
+    bool addNoteNext_ = false;              // "Add pane" creates a note pane
+    int pendingNotePane_ = -1;              // context note waiting for the first frame's layout
+    float pendingNoteFrac_ = 0.f;
+    void layoutNote(float width);
+    void drawNotePane(ImDrawList* dl);
+    void drawNoteEditor();
+    bool scrollNoteAt(ImVec2 m, float delta);  // true if a note under m consumed the scroll
+    void addContextNote(const char* text, float heightFrac);
     int rotateDragPane_ = -1;
     float panelScrollReq_ = -1;  // testing: scroll the panel to this y  // on-canvas spin button + speed slider for 3D panes
     bool inVisible(ImVec2 p) const { return p.x >= visRect_.x && p.x < visRect_.z && p.y >= visRect_.y && p.y < visRect_.w; }
@@ -467,6 +493,10 @@ struct DemoPane {
     int res = 48;
     bool fitZ = false;         // refit the height scale every frame (for shapes whose size animates)
 };
+
+namespace demo_notes {
+extern const char *kRiemann, *kPoincare, *kNavierStokes, *kPvsNP, *kHodge, *kYangMills, *kBSD;
+}
 
 struct Example {
     const char* label;

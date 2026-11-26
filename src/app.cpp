@@ -173,6 +173,13 @@ void App::frame(float dt) {
         panelW_ = panelFullW_ * (1.f - theme::smooth(panelSlide_));
     }
     computePaneRects();
+    if (pendingNotePane_ >= 0 && pendingNotePane_ < (int)panes_.size()) {  // finish a demo's note layout
+        const float vh = visRect_.w - visRect_.y - 11.f;
+        std::vector<float> h(panes_.size(), vh);
+        h[pendingNotePane_] = vh * pendingNoteFrac_;
+        relayoutFromHeights(h);
+        pendingNotePane_ = -1;
+    }
     enterPane(focus_);
     ++frameNo_;
     if (!opt_.actions.empty()) runScriptedActions();
@@ -226,6 +233,14 @@ void App::frame(float dt) {
     dl->PushClipRect(ImVec2(visRect_.x, visRect_.y), ImVec2(visRect_.z, visRect_.w), false);
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
+        if (isNote_) {
+            if (canvasMax_.y > visRect_.y && canvasMin_.y < visRect_.w && canvasMax_.x > visRect_.x && canvasMin_.x < visRect_.z) {
+                dl->PushClipRect(canvasMin_, canvasMax_, true);
+                drawNotePane(dl);
+                dl->PopClipRect();
+            }
+            continue;
+        }
         applyFit();
         if (want3D_ && !threeD_ && !dimAnimating_) { want3D_ = false; startDim(true); }
         if (hasSum_) sumCount_ = computeSumCount();
@@ -240,7 +255,7 @@ void App::frame(float dt) {
         else drawScene2D(dl);
         drawOverlay(dl);
         dl->PopClipRect();
-        if (!dimAnimating_) drawRotateControl(i);
+        if (!dimAnimating_ && !isNote_) drawRotateControl(i);
     }
     drawLayoutChrome(dl);
     dl->PopClipRect();
@@ -618,6 +633,9 @@ void App::runScriptedActions() {
         else if (a == "x") closePane(focus_);
         else if (a == "hide") togglePanel();
         else if (a == "pan") autoPan_ = !autoPan_;
+        else if (a == "notenext") addNoteNext_ = true;
+        else if (a.rfind("saveto", 0) == 0) saveProject(a.substr(6));
+        else if (a.rfind("wscroll", 0) == 0) scroll_.y = (float)std::atof(a.c_str() + 7);
         else if (a.rfind("res", 0) == 0) surfRes_ = std::atoi(a.c_str() + 3);
         else if (a.rfind("theme", 0) == 0) selectTheme(std::atoi(a.c_str() + 5));
         else if (a.rfind("pscroll", 0) == 0) panelScrollReq_ = (float)std::atof(a.c_str() + 7);

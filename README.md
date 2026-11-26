@@ -61,6 +61,14 @@ background, a blue number plane, crisp yellow curves, TeX-style typeset labels a
   - **Birch and Swinnerton-Dyer**: an adjustable elliptic curve, and their original experiment,
     log ∏ N_p/p against ln ln x for curves of rank 0–3 (point counts via `legendre`).
   - Riemann, Poincaré and Navier–Stokes, below.
+- **Note panes**: choose "New panes: note" and add a pane to get explanatory text with typeset
+  maths: `# Heading`, `## Subheading`, `- bullet`, `**bold**`, inline `$x^2$`, and displayed
+  `$$ e^(i pi) + 1 = 0 $$` equations (relations `= < > <= >= != ~ ->`, lists and tuples, and
+  `\partial`, `\nabla`, `\Ric` style upright symbols). Edit the text in the panel; notes are saved
+  with the project. Each Millennium demo opens with a note explaining the problem.
+- **Tall panes**: with "Let panes extend past the window" on, panes added above or below get a
+  full window of height, dragging a gap down makes a pane taller than the window, and you scroll
+  down through the workspace.
 - **Riemann Hypothesis demo** (Project, then Open): on the left, ζ(z) transforming the
   complex plane; on the right, the prime staircase π₀(x), Riemann's
   smooth R(x), |ζ(½ + ix)| touching zero at each γₖ, and the explicit-formula curve
@@ -164,6 +172,7 @@ Keys (when not typing): `Tab` hide/show the panel · `Space` play/pause the sum 
 | `src/scene3d.cpp` | camera, surface meshes, painter's-algorithm depth sorting |
 | `src/panel.cpp` | control panel and on-canvas equation labels |
 | `src/themes.cpp`, `src/fonts.cpp`, `src/appearance.cpp` | colour themes, font choices, Appearance section and settings |
+| `src/notes.cpp`, `src/demo_notes.cpp` | note panes (markup, layout, editor) and the demos' explanations |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |
 | `src/app.*` | state, animations, input, mode transitions |

@@ -89,6 +89,7 @@ void App::rebuildProject(bool sameRow) {
     const int start = cur_;
     for (int p = 0; p < (int)panes_.size(); ++p) {
         enterPane(p);
+        if (isNote_) continue;
         active_ = std::clamp(active_, 0, (int)funcs_.size() - 1);
         const bool same = p == start ? sameRow : true;
         FuncDef& a = funcs_[active_];
@@ -122,6 +123,8 @@ void App::resetForProject() {
         gridStep_ = 0;
         lockZScale_ = false;
         fitZEveryFrame_ = false;
+        isNote_ = false;
+        noteText_.clear();
     }
     enterPane(start);
     funcs_.clear();
@@ -204,6 +207,7 @@ void App::loadDemoRiemann() {
     fitRange_ = ImVec4(1.5f, 62.f, -1.5f, 19.f);
     focus_ = 1;
     rebuildProject(true);
+    addContextNote(demo_notes::kRiemann, 0.72f);
 }
 
 // Poincare conjecture (Perelman 2003): every closed, simply connected 3-manifold is
@@ -279,6 +283,7 @@ void App::loadDemoPoincare() {
     hideAllBut({6, 7, 8});
     focus_ = 2;
     rebuildProject(true);
+    addContextNote(demo_notes::kPoincare, 0.72f);
 }
 
 // Navier-Stokes: exact solutions of the incompressible equations
@@ -350,6 +355,7 @@ void App::loadDemoNavierStokes() {
     hideAllBut({5, 6});
     focus_ = 2;
     rebuildProject(true);
+    addContextNote(demo_notes::kNavierStokes, 0.72f);
 }
 
 std::string App::projectDir() const {
@@ -390,6 +396,18 @@ bool App::saveProject(const std::string& path) {
             << (autoRotate_ ? 1 : 0) << "\t" << rotateSpeed_ << "\t" << (autoPan_ ? 1 : 0) << "\t" << panVx_ << "\t"
             << panVy_ << "\t" << panVz_ << "\n";
     }
+    for (int i = 0; i < (int)panes_.size(); ++i) {
+        enterPane(i);
+        if (!isNote_) continue;
+        std::string esc;
+        for (char c : noteText_) {
+            if (c == '\\') esc += "\\\\";
+            else if (c == '\n') esc += "\\n";
+            else if (c == '\t') esc += "\\t";
+            else esc += c;
+        }
+        out << "notepane\t" << i << "\t" << esc << "\n";
+    }
     enterPane(start);
     enterPane(focus_);
     bool firstVisible = true;
@@ -411,7 +429,7 @@ bool App::loadProject(const std::string& path) {
     std::vector<FuncDef> fs;
     std::vector<Param> ps;
     std::vector<int> fnVisible;
-    std::vector<std::pair<int, std::string>> labels;
+    std::vector<std::pair<int, std::string>> labels, notePanes;
     struct PaneSpec { bool complex = false, threeD = false; int active = 0; double cx = 0, cy = 0, s = 72, a = 1; std::vector<int> hidden; bool rotate = false; float rotSpeed = 10; bool pan = false; float pv[3] = {0.5f, 0, 0}; };
     std::vector<PaneSpec> paneSpecs;
     int layoutN = 0, layoutKind = 1, layoutFocus = 0, treeRoot = -1;
@@ -444,6 +462,15 @@ bool App::loadProject(const std::string& path) {
                 Param p;
                 p.name = f[1]; p.value = std::stof(f[2]); p.min = std::stof(f[3]); p.max = std::stof(f[4]);
                 ps.push_back(p);
+            } else if (f[0] == "notepane" && f.size() > 2) {
+                std::string raw = f[2], txt;
+                for (size_t k = 0; k < raw.size(); ++k) {
+                    if (raw[k] == '\\' && k + 1 < raw.size()) {
+                        char n = raw[++k];
+                        txt += n == 'n' ? '\n' : n == 't' ? '\t' : n;
+                    } else txt += raw[k];
+                }
+                notePanes.push_back({std::stoi(f[1]), txt});
             } else if (f[0] == "label" && f.size() > 2) {
                 labels.push_back({std::stoi(f[1]), f[2]});
             } else if (f[0] == "workspace" && f.size() > 3) {
@@ -535,6 +562,12 @@ bool App::loadProject(const std::string& path) {
         }
         for (int c : seen) ok = ok && c == 1;
         if (ok) { nodes_ = tree; rootNode_ = treeRoot; }
+    }
+    for (auto& [pi, txt] : notePanes) {
+        if (pi < 0 || pi >= (int)panes_.size()) continue;
+        enterPane(pi);
+        isNote_ = true;
+        noteText_ = txt;
     }
     focus_ = std::clamp(layoutFocus, 0, (int)panes_.size() - 1);
     computePaneRects();

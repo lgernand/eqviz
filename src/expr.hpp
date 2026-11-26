@@ -48,7 +48,8 @@ struct ParseResult {
     std::string error;
 };
 // userFns: names of user-defined functions, parsed as calls name(a, b, ...)
-ParseResult parse(const std::string& src, const std::set<std::string>* userFns = nullptr);
+// keepParens: record explicit parentheses as Call nodes with an empty name (display only).
+ParseResult parse(const std::string& src, const std::set<std::string>* userFns = nullptr, bool keepParens = false);
 
 // A line in a project: "f(x) = ...", "L(u, v) = ...", "y = ..." or just "...".
 struct DefHeader {
@@ -58,6 +59,7 @@ struct DefHeader {
     std::string body;                // text right of '=' (or everything)
 };
 DefHeader parseHeader(const std::string& src);
+bool isBuiltinFunction(const std::string& name);  // sin, zeta, sum, ...
 
 // User-defined functions available for inlining: name -> (parameters, body).
 struct FnTable {

@@ -1,6 +1,7 @@
 // Pane layout: a binary tree of splits that the user can grow, shrink and resize,
 // inside a workspace that may be larger than the window (with scrollbars).
 #include <algorithm>
+#include <functional>
 
 #include "app.hpp"
 #include "gl.hpp"
@@ -54,6 +55,41 @@ void App::computePaneRects() {
     splitters_.clear();
     const float x0 = visRect_.x - scroll_.x, y0 = visRect_.y - scroll_.y;
     layoutRects(rootNode_, ImVec4(x0, y0, x0 + ww, y0 + wh));
+}
+
+// ------------------------------------------------------------------ height-preserving layout
+// In an extended (scrollable) workspace, panes keep their pixel heights: stacked splits get
+// ratios from their children's heights and the workspace grows to the total.
+
+std::vector<float> App::paneHeights() const {
+    std::vector<float> h(panes_.size());
+    for (size_t i = 0; i < h.size() && i < paneRects_.size(); ++i) h[i] = paneRects_[i].w - paneRects_[i].y;
+    return h;
+}
+
+float App::subtreeHeight(int n, const std::vector<float>& h) const {
+    if (n < 0 || n >= (int)nodes_.size()) return 0;
+    const LayoutNode& nd = nodes_[n];
+    if (nd.pane >= 0) return nd.pane < (int)h.size() ? std::max(kMinPane, h[nd.pane]) : kMinPane;
+    float a = subtreeHeight(nd.a, h), b = subtreeHeight(nd.b, h);
+    return nd.stacked ? a + b + kGap : std::max(a, b);
+}
+
+void App::relayoutFromHeights(const std::vector<float>& h) {
+    std::function<float(int)> fix = [&](int n) -> float {
+        LayoutNode& nd = nodes_[n];
+        if (nd.pane >= 0) return nd.pane < (int)h.size() ? std::max(kMinPane, h[nd.pane]) : kMinPane;
+        float a = fix(nd.a), b = fix(nd.b);
+        if (!nd.stacked) return std::max(a, b);
+        nd.ratio = (a + kGap * 0.5f) / (a + b + kGap);
+        return a + b + kGap;
+    };
+    const float total = fix(rootNode_);
+    const float vh = visRect_.w - visRect_.y;
+    if (!extendWorkspace_) wsW_ = 1.f;
+    extendWorkspace_ = true;
+    wsH_ = std::max(1.f, total / std::max(1.f, vh));
+    computePaneRects();
 }
 
 // ------------------------------------------------------------------ tree edits
@@ -122,11 +158,19 @@ void App::addPane(Side side) {
     for (int i = 0; i < (int)nodes_.size(); ++i)
         if (nodes_[i].pane == focus_) leaf = i;
     if (leaf < 0) return;
+    std::vector<float> keepH = paneHeights();
+    const bool vertical = side == kAbove || side == kBelow;
     const int act = active_, newPane = (int)panes_.size();
     panes_.emplace_back();
     enterPane(newPane);
     initPane();
     active_ = act;  // the new pane starts on the focused pane's main function, real axes
+    if (addNoteNext_) {
+        isNote_ = true;
+        noteText_ = "# Notes\n\nWrite an explanation here. Displayed equations go on their own line:\n\n"
+                    "$$ e^(i pi) + 1 = 0 $$\n\nInline maths like $a^2 + b^2 = c^2$, **bold** text, and\n"
+                    "- bullet points\n- with # and ## headings\n\nEdit this text in the panel on the left.";
+    }
 
     LayoutNode oldLeaf;
     oldLeaf.pane = focus_;
@@ -143,6 +187,10 @@ void App::addPane(Side side) {
     if (side == kLeft || side == kAbove) { split.a = ib; split.b = ia; }
     else { split.a = ia; split.b = ib; }
     focus_ = newPane;
+    if (extendWorkspace_ && vertical) {  // the new pane gets a full window of height; others keep theirs
+        keepH.push_back(visRect_.w - visRect_.y - (extendWorkspace_ ? 11.f : 0.f));
+        relayoutFromHeights(keepH);
+    }
     computePaneRects();
     rebuildProject(true);
     enterPane(focus_);
@@ -158,6 +206,7 @@ void App::closePane(int i) {
     for (int n = 0; n < (int)nodes_.size(); ++n)
         if (nodes_[n].pane < 0 && (nodes_[n].a == leaf || nodes_[n].b == leaf)) parent = n;
     if (leaf < 0 || parent < 0) return;
+    std::vector<float> keepH = paneHeights();
     const int sibling = nodes_[parent].a == leaf ? nodes_[parent].b : nodes_[parent].a;
     nodes_[parent] = nodes_[sibling];  // the sibling takes the parent's place
     nodes_[leaf].pane = -2;            // orphaned (kept so indices stay valid)
@@ -175,6 +224,10 @@ void App::closePane(int i) {
         if (nd.pane > i) --nd.pane;
     if (focus_ >= i && focus_ > 0) --focus_;
     focus_ = std::min(focus_, (int)panes_.size() - 1);
+    if (extendWorkspace_) {
+        keepH.erase(keepH.begin() + i);
+        relayoutFromHeights(keepH);
+    }
     computePaneRects();
     enterPane(focus_);
 }
@@ -189,6 +242,21 @@ void App::handleLayoutInput() {
     const float ww = extendWorkspace_ ? vw * std::max(1.f, wsW_) : vw;
     const float wh = extendWorkspace_ ? vh * std::max(1.f, wsH_) : vh;
 
+    // a note pane under the cursor scrolls first (trackpad or mouse wheel); a mouse wheel over a
+    // note that fits scrolls the workspace instead (there is nothing to zoom in a note)
+    if (!io.WantCaptureMouse && inVisible(m)) {
+        const float dy = (plat_.trackpad ? plat_.scrollY : 0.f) + (!plat_.trackpad ? io.MouseWheel * 48.f : 0.f);
+        int hp = -1;
+        for (int i = 0; i < (int)paneRects_.size(); ++i) {
+            const ImVec4& r = paneRects_[i];
+            if (m.x >= r.x && m.x < r.z && m.y >= r.y && m.y < r.w) hp = i;
+        }
+        const bool overNote = hp >= 0 && (hp == cur_ ? isNote_ : panes_[hp].isNote_);
+        if (overNote && dy != 0) {
+            if (scrollNoteAt(m, -dy)) { plat_.scrollY = 0; io.MouseWheel = 0; }
+            else if (!plat_.trackpad && extendWorkspace_) { scroll_.y -= dy; io.MouseWheel = 0; }
+        }
+    }
     // scroll the workspace with two-finger trackpad scrolling (a mouse wheel zooms instead;
     // with a mouse, use the scrollbars)
     if (extendWorkspace_ && plat_.trackpad && !io.WantCaptureMouse && inVisible(m)) {
@@ -242,6 +310,22 @@ void App::handleLayoutInput() {
             for (const Splitter& s : splitters_) {
                 if (s.node != dragSplit_) continue;
                 LayoutNode& nd = nodes_[s.node];
+                if (extendWorkspace_ && s.stacked) {
+                    std::vector<float> h = paneHeights();
+                    float oldA = subtreeHeight(nd.a, h);
+                    float newA = std::max(kMinPane, m.y - s.area.y - kGap * 0.5f);
+                    std::vector<int> leaves;
+                    std::function<void(int)> collect = [&](int n) {
+                        if (n < 0) return;
+                        if (nodes_[n].pane >= 0) leaves.push_back(nodes_[n].pane);
+                        else { collect(nodes_[n].a); collect(nodes_[n].b); }
+                    };
+                    collect(nd.a);
+                    for (int p : leaves) h[p] *= newA / std::max(1.f, oldA);
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                    relayoutFromHeights(h);  // rebuilds splitters_: stop iterating
+                    break;
+                }
                 float span = s.stacked ? s.area.w - s.area.y : s.area.z - s.area.x;
                 float pos = s.stacked ? m.y - s.area.y : m.x - s.area.x;
                 float lo = std::min(0.5f, kMinPane / std::max(1.f, span));

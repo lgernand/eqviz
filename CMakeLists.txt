@@ -37,6 +37,7 @@ add_library(imgui STATIC
   ${IMGUI_DIR}/imgui_draw.cpp
   ${IMGUI_DIR}/imgui_tables.cpp
   ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
   ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
   ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp)
 target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
@@ -57,6 +58,8 @@ add_executable(eqviz
   src/themes.cpp
   src/fonts.cpp
   src/appearance.cpp
+  src/notes.cpp
+  src/demo_notes.cpp
   src/expr.cpp
   src/typeset.cpp)
 if(APPLE)

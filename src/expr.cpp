@@ -147,6 +147,7 @@ uint32_t decode(const std::string& s, size_t& i) {
 }
 
 thread_local const std::set<std::string>* gUserFns = nullptr;
+thread_local bool gKeepParens = false;
 
 bool isKnownWord(const std::string& w) {
     if (gUserFns && gUserFns->count(w)) return true;
@@ -201,6 +202,13 @@ std::vector<Tok> lex(const std::string& s) {
             std::string numStr = s.substr(i, j - i);
             if (std::count(numStr.begin(), numStr.end(), '.') > 1) fail("Malformed number '" + numStr + "'", pos);
             push(T::Num, pos, numStr, std::stod(numStr));
+            i = j;
+            continue;
+        }
+        if (c == '\\' && i + 1 < s.size() && std::isalpha((unsigned char)s[i + 1])) {  // \name: upright word / symbol
+            size_t j = i + 1;
+            while (j < s.size() && std::isalpha((unsigned char)s[j])) ++j;
+            push(T::Ident, pos, s.substr(i, j - i));
             i = j;
             continue;
         }
@@ -265,6 +273,8 @@ std::vector<Tok> lex(const std::string& s) {
                 case 0xF7: case 0x2215: push(T::Slash, pos); continue;
                 case 0x2212: case 0x2013: push(T::Minus, pos); continue;
                 case 0x221A: push(T::Sqrt, pos); continue;
+                case 0x2202: push(T::Ident, pos, "\\partial"); continue;
+                case 0x2207: push(T::Ident, pos, "\\nabla"); continue;
                 case 0x221E: push(T::Ident, pos, "inf"); continue;
                 case 0x2211: case 0x3A3: push(T::Ident, pos, "sum"); continue;
                 case 0x220F: push(T::Ident, pos, "prod"); continue;
@@ -362,7 +372,17 @@ private:
         const Tok& k = peek();
         switch (k.t) {
             case T::Num: { double v = k.v; next(); return num(v); }
-            case T::LP: { next(); NodeP e = additive(); expect(T::RP, "')'"); return e; }
+            case T::LP: {
+                next();
+                NodeP e = additive();
+                expect(T::RP, "')'");
+                if (gKeepParens) {  // display-only grouping
+                    auto g = newNode(Op::Call);
+                    g->kids = {e};
+                    return g;
+                }
+                return e;
+            }
             case T::Pipe: {
                 next(); ++absDepth_;
                 NodeP e = additive();
@@ -381,6 +401,7 @@ private:
         int pos = peek().pos;
         next();
         if (isBound(name)) return var(name);
+        if (name[0] == '\\') return var(name);  // upright name, e.g. \Ric, \partial
         if (gUserFns && gUserFns->count(name) && peek().t == T::LP) {
             next();
             auto call = newNode(Op::Call);
@@ -476,11 +497,11 @@ private:
 
 }  // namespace
 
-ParseResult parse(const std::string& src, const std::set<std::string>* userFns) {
+ParseResult parse(const std::string& src, const std::set<std::string>* userFns, bool keepParens) {
     struct Guard {
-        explicit Guard(const std::set<std::string>* u) { gUserFns = u; }
-        ~Guard() { gUserFns = nullptr; }
-    } guard(userFns);
+        Guard(const std::set<std::string>* u, bool k) { gUserFns = u; gKeepParens = k; }
+        ~Guard() { gUserFns = nullptr; gKeepParens = false; }
+    } guard(userFns, keepParens);
     try {
         std::vector<Tok> toks = lex(src);
         int depth = 0, eqPos = -1;
@@ -1642,4 +1663,11 @@ double primePi(double x) {
 
 namespace eq {
 const std::vector<double>& zetaBorweinWeights(int n) { return borweinW(n); }
+}  // namespace eq
+
+namespace eq {
+bool isBuiltinFunction(const std::string& name) {
+    Fn f;
+    return lookupFn(name, f) || name == "sum" || name == "prod";
+}
 }  // namespace eq

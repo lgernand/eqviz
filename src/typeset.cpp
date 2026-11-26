@@ -100,6 +100,17 @@ static std::string italicize(const std::string& name) {
 }
 
 Box ident(const std::string& full, float size) {
+    if (!full.empty() && full[0] == '\\') {  // \name: symbol, or an upright word like Ric
+        static const std::pair<const char*, const char*> sym[] = {
+            {"partial", "\xE2\x88\x82"}, {"nabla", "\xE2\x88\x87"}, {"cdot", "\xE2\x8B\x85"}, {"infty", "\xE2\x88\x9E"},
+            {"times", "\xC3\x97"},        {"ell", "\xE2\x84\x93"},  {"hbar", "\xE2\x84\x8F"},  {"oplus", "\xE2\x8A\x95"},
+            {"C", "\xE2\x84\x82"},       {"Q", "\xE2\x84\x9A"},    {"Z", "\xE2\x84\xA4"},    {"R", "\xE2\x84\x9D"},
+            {"N", "\xE2\x84\x95"}};
+        const std::string w = full.substr(1);
+        for (auto& p : sym)
+            if (w == p.first) return text(p.second, size);
+        return hcat({text(w, size), space(0.06f * size)});
+    }
     std::string base = full, sub;
     size_t us = full.find('_');
     if (us != std::string::npos) {
@@ -363,6 +374,11 @@ bool startsWithDigit(const NodeP& n) {
 
 Box lay(const NodeP& n, float size, const Ctx& c);
 
+// A display-only group (explicit parentheses) is unnecessary inside a fraction or exponent.
+const NodeP& ungroup(const NodeP& n) {
+    return (n->op == Op::Call && n->name.empty() && n->kids.size() == 1) ? ungroup(n->kids[0]) : n;
+}
+
 Box layP(const NodeP& n, float size, const Ctx& c, bool paren) {
     Box b = lay(n, size, c);
     return paren ? parens(b, size) : b;
@@ -473,16 +489,17 @@ Box lay(const NodeP& n, float size, const Ctx& c) {
             float g = 0.05f * size;
             if (a->op == Op::Num) g = 0.02f * size;
             if (b->op == Op::Func || a->op == Op::Func || b->op == Op::Sum || b->op == Op::Prod) g = 0.12f * size;
+            if (a->op == Op::Var && !a->name.empty() && a->name[0] == '\\') g = 0.1f * size;
             return hcat({L, space(g), R});
         }
         case Op::Div: {
             float s = std::max(c.minSize, size * 0.92f);
-            return frac(lay(n->kids[0], s, c), lay(n->kids[1], s, c), size);
+            return frac(lay(ungroup(n->kids[0]), s, c), lay(ungroup(n->kids[1]), s, c), size);
         }
         case Op::Pow: {
             const NodeP &a = n->kids[0], &b = n->kids[1];
             Box base = layP(a, size, c, prec(a) < 60 || (a->op == Op::Num && a->val.imag() != 0));
-            return sup(base, lay(b, scr, c), size);
+            return sup(base, lay(ungroup(b), scr, c), size);
         }
         case Op::Neg: {
             const NodeP& a = n->kids[0];
@@ -507,6 +524,7 @@ Box lay(const NodeP& n, float size, const Ctx& c) {
                 if (i) { parts.push_back(text(",", size)); parts.push_back(space(0.2f * size)); }
                 parts.push_back(lay(n->kids[i], size, c));
             }
+            if (n->name.empty()) return parens(hcat(parts), size);  // explicit grouping
             return hcat({ident(n->name, size), parens(hcat(parts), size)});
         }
         case Op::NumDeriv: {
