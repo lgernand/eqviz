@@ -74,9 +74,13 @@ bool Camera::project(const Vec3& p, ImVec2& out, float& depth) const {
 
 // ------------------------------------------------------------------ lifecycle
 
+void inkSetPersist(bool on);
+bool inkTeach(const std::string& label, const InkStrokes& s, const std::vector<int>& idx);
+
 void App::init(const Fonts& f, const LaunchOptions& o) {
     fonts_ = f;
     opt_ = o;
+    inkSetPersist(o.frames == 0);  // scripted runs never touch the learned handwriting
     ts::init(f.math, f.mathAlnum, f.mathItalic);
     loadSettings();
     setupStyle();
@@ -246,6 +250,14 @@ void App::frame(float dt) {
             if (canvasMax_.y > visRect_.y && canvasMin_.y < visRect_.w && canvasMax_.x > visRect_.x && canvasMin_.x < visRect_.z) {
                 dl->PushClipRect(canvasMin_, canvasMax_, true);
                 drawNotePane(dl);
+                dl->PopClipRect();
+            }
+            continue;
+        }
+        if (isInk_) {
+            if (canvasMax_.y > visRect_.y && canvasMin_.y < visRect_.w && canvasMax_.x > visRect_.x && canvasMin_.x < visRect_.z) {
+                dl->PushClipRect(canvasMin_, canvasMax_, true);
+                drawInkPane(dl, i);
                 dl->PopClipRect();
             }
             continue;
@@ -676,7 +688,20 @@ void App::runScriptedActions() {
         else if (a == "x") closePane(focus_);
         else if (a == "hide") togglePanel();
         else if (a == "pan") autoPan_ = !autoPan_;
-        else if (a == "notenext") addNoteNext_ = true;
+        else if (a == "notenext") newPaneKind_ = 1;
+        else if (a == "inknext") newPaneKind_ = 2;
+        else if (a.rfind("inktext:", 0) == 0) { inkStrokes_.clear(); inkFix_.clear(); inkSynthesize(a.substr(8)); }
+        else if (a.rfind("inkfix", 0) == 0) {  // inkfix<k>;<label>: correct the k-th symbol, as the popup would
+            const size_t semi = a.find(';');
+            const int k = std::atoi(a.c_str() + 6);
+            inkRecognize();
+            if (semi != std::string::npos && k >= 0 && k < (int)inkResult_.symbols.size()) {
+                InkSymbol& sy = inkResult_.symbols[k];
+                inkFix_[sy.key] = a.substr(semi + 1);
+                inkTeach(a.substr(semi + 1), inkStrokes_, sy.strokes);
+                inkHash_ = 0;
+            }
+        }
         else if (a.rfind("saveto", 0) == 0) saveProject(a.substr(6));
         else if (a.rfind("wscroll", 0) == 0) scroll_.y = (float)std::atof(a.c_str() + 7);
         else if (a.rfind("res", 0) == 0) surfRes_ = std::atoi(a.c_str() + 3);

@@ -63,6 +63,7 @@ add_executable(eqviz
   src/timeline.cpp
   src/fractal.cpp
   src/overlays.cpp
+  src/ink.cpp
   src/lesson.cpp
   src/lessons_content.cpp
   src/lesson_tests.cpp
@@ -76,11 +77,11 @@ add_executable(eqviz
   src/typeset.cpp)
 if(APPLE)
   enable_language(OBJCXX)
-  target_sources(eqviz PRIVATE src/platform_mac.mm src/video_mac.mm)
-  set_source_files_properties(src/video_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
-  target_link_libraries(eqviz PRIVATE "-framework Cocoa" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo")
+  target_sources(eqviz PRIVATE src/platform_mac.mm src/video_mac.mm src/ink_vision.mm)
+  set_source_files_properties(src/video_mac.mm src/ink_vision.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+  target_link_libraries(eqviz PRIVATE "-framework Cocoa" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo" "-framework Vision")
 else()
-  target_sources(eqviz PRIVATE src/platform_stub.cpp src/video_stub.cpp)
+  target_sources(eqviz PRIVATE src/platform_stub.cpp src/video_stub.cpp src/ink_vision_stub.cpp)
 endif()
 target_link_libraries(eqviz PRIVATE imgui Threads::Threads)
 if(APPLE)

@@ -243,6 +243,23 @@ using NoteItems = std::vector<NoteItem>;
 
 // Everything that belongs to one coordinate plane. App holds the current pane's
 // copy of these members; App::enterPane swaps panes in and out.
+// Handwriting panes (ink.cpp)
+struct InkSymbol {
+    std::string label;                                  // what it was read as ("x", "2", "+", "frac", "sqrt", ...)
+    std::vector<std::pair<std::string, float>> alts;    // best guesses with their distances, best first
+    ImVec4 box;                                         // pane-local pixels
+    std::vector<int> strokes;                           // indices into the pane's strokes
+    std::string key;                                    // identifies the stroke group (for corrections)
+    std::vector<std::string> shape;                     // the shape matcher's own top guesses (before Vision)
+};
+struct InkResult {
+    std::vector<InkSymbol> symbols;
+    std::string expr;                                   // eqviz expression text ("" if nothing)
+    std::string error;                                  // parse problem, if any
+};
+using InkStrokes = std::vector<std::vector<ImVec2>>;     // pane-local pixels
+using InkFixes = std::map<std::string, std::string>;     // corrected labels by stroke-group key
+
 // Unit-circle pane options (bit flags)
 enum : int { kCircSinCos = 1, kCircTan = 2, kCircCot = 4, kCircDegrees = 8, kCircSnap = 16, kCircArc = 32,
              kCircDefault = kCircSinCos | kCircSnap | kCircArc };
@@ -294,7 +311,9 @@ enum : int { kFieldArrows = 1, kFieldStream = 2, kFieldSolution = 4, kFieldDefau
     X(float, matAnim_, 1.f) X(ImVec2, matHandle_, {}) X(bool, draggingVec_, false)                          \
     X(std::string, curveX_, {}) X(std::string, curveY_, {}) X(std::string, curveT0_, {}) X(std::string, curveT1_, {}) \
     X(std::string, curveDot_, {}) X(std::string, fieldP_, {}) X(std::string, fieldQ_, {}) X(int, fieldOpts_, kFieldDefault) \
-    X(double, fieldSX_, 0) X(double, fieldSY_, 1) X(ImVec2, fieldHandle_, {}) X(bool, draggingSeed_, false)
+    X(double, fieldSX_, 0) X(double, fieldSY_, 1) X(ImVec2, fieldHandle_, {}) X(bool, draggingSeed_, false) \
+    X(bool, isInk_, false) X(InkStrokes, inkStrokes_, {}) X(InkFixes, inkFix_, {}) X(InkResult, inkResult_, {})   \
+    X(uint64_t, inkHash_, 0) X(bool, inkDrawing_, false) X(bool, inkErasing_, false) X(int, inkPick_, -1)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -629,6 +648,13 @@ public:
     void drawFractalOverlay(ImDrawList* dl);  // Julia-constant marker and the orbit under the cursor
     void setFractal(bool on, bool julia);
     void drawFractalSection();
+
+    // ---- handwriting panes (ink.cpp)
+    int newPaneKind_ = 0;  // what "Add pane" makes: 0 graph, 1 note, 2 handwriting
+    bool inkVision_ = true;  // also ask Apple's on-device handwriting recognition (macOS)
+    void drawInkPane(ImDrawList* dl, int pane);
+    void inkRecognize();   // refresh inkResult_ for the current pane if its strokes changed
+    void inkSynthesize(const std::string& text);  // testing: write text as strokes in a handwriting-like font
 
     // ---- lessons (lesson.cpp)
     int lessonIdx_ = -1, lessonStep_ = 0;

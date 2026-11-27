@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "app.hpp"
+#include "misc/cpp/imgui_stdlib.h"
 #include "theme.hpp"
 
 using namespace theme;
@@ -209,15 +210,19 @@ void App::drawPanel() {
         // panes: add next to the focused one, close it, let the workspace grow past the window
         // what the next added pane is
         {
-            float half = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
-            for (int k = 0; k < 2; ++k) {
-                if (k) ImGui::SameLine(0, 6);
-                const bool sel = addNoteNext_ == (k == 1);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("New panes");
+            const float w3 = (ImGui::GetContentRegionAvail().x - 84 - 12) / 3;
+            const char* kinds[] = {"graph", "note", "handwriting"};
+            const char* tips[] = {"Panes you add show graphs", "Panes you add show explanatory text with typeset maths",
+                                  "Panes you add are for writing equations by hand; they are typeset in the equation font"};
+            for (int k = 0; k < 3; ++k) {
+                ImGui::SameLine(k == 0 ? 84.f : 0.f, k == 0 ? 0.f : 6.f);
+                const bool sel = newPaneKind_ == k;
                 if (sel) pushAccent(BLUE_C);
-                if (ImGui::Button(k ? "New panes: note" : "New panes: graph", ImVec2(half, 28))) addNoteNext_ = k == 1;
+                if (ImGui::Button(kinds[k], ImVec2(w3, 28))) newPaneKind_ = k;
                 if (sel) ImGui::PopStyleColor(3);
-                ImGui::SetItemTooltip(k ? "Panes you add show explanatory text with typeset maths"
-                                        : "Panes you add show graphs");
+                ImGui::SetItemTooltip("%s", tips[k]);
             }
         }
         ImGui::AlignTextToFramePadding();
@@ -272,12 +277,29 @@ void App::drawPanel() {
         sectionHeader("NOTE", fonts_.uiBold);
         drawNoteEditor();
     }
-    if (!isNote_) {
+    if (isInk_) {
+        sectionHeader("HANDWRITING", fonts_.uiBold);
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextUnformatted("Write in the pane with the mouse, trackpad or a pen; right-drag erases. The equation below the ink is typeset "
+                               "in the equation font.");
+        ImGui::TextDisabled("Each symbol shows what it was read as. Click a tag to correct it: corrections are remembered and teach the "
+                            "recognizer your handwriting. Write fractions with a bar, exponents small and raised, and square roots with a long top line.");
+        ImGui::PopTextWrapPos();
+        if (ImGui::Checkbox("Also use Apple's handwriting recognition", &inkVision_)) inkHash_ = 0;
+        ImGui::SetItemTooltip("Combines the built-in recognizer with macOS's on-device text recognition (Vision). Nothing leaves this Mac.");
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Read as");
+        ImGui::SameLine(84);
+        ImGui::SetNextItemWidth(-1);
+        std::string shown = inkResult_.expr.empty() ? "(nothing yet)" : inkResult_.expr;
+        ImGui::InputText("##inkexpr", &shown, ImGuiInputTextFlags_ReadOnly);
+    }
+    if (!isNote_ && !isInk_) {
     if (segmented("Real axes", "Complex plane", fadeStage_ ? pendingComplex_ : complex_, BLUE_C)) toggleComplex();
     bool showing3D = dimAnimating_ ? dimTo3D_ : threeD_;
     if (segmented("2D", "3D", showing3D, BLUE_C)) toggle3D();
     }
-    if (!isNote_) {
+    if (!isNote_ && !isInk_) {
         const char* lbl = deriv_ ? (complex_ ? "Showing f\xE2\x80\xB2(z)  \xC2\xB7  click to hide" : "Hide first derivative")
                                  : "Show first derivative  f\xE2\x80\xB2";
         if (deriv_) pushAccent(GREEN_C);
@@ -397,7 +419,7 @@ void App::drawPanel() {
     }
 
     // ---- mode specific options
-    if (!isNote_) {
+    if (!isNote_ && !isInk_) {
     sectionHeader(threeD_ ? "SURFACE" : (complex_ ? "COMPLEX PLANE" : "GRAPH"), fonts_.uiBold);
     if (threeD_) {
         labelRow("Domain  \xC2\xB1R", 110);

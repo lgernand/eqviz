@@ -165,7 +165,8 @@ void App::addPane(Side side) {
     enterPane(newPane);
     initPane();
     active_ = act;  // the new pane starts on the focused pane's main function, real axes
-    if (addNoteNext_) {
+    if (newPaneKind_ == 2) isInk_ = true;
+    if (newPaneKind_ == 1) {
         isNote_ = true;
         noteText_ = "# Notes\n\nWrite an explanation here. Displayed equations go on their own line:\n\n"
                     "$$ e^(i pi) + 1 = 0 $$\n\nInline maths like $a^2 + b^2 = c^2$, **bold** text, and\n"

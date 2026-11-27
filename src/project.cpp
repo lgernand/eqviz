@@ -130,6 +130,9 @@ void App::resetForProject() {
         isNote_ = false;
         noteText_.clear();
         fractal_ = fracJulia_ = false;
+        isInk_ = false;
+        inkStrokes_.clear();
+        inkFix_.clear();
     }
     enterPane(start);
     funcs_.clear();
@@ -415,6 +418,17 @@ bool App::saveProject(const std::string& path) {
     }
     for (int i = 0; i < (int)panes_.size(); ++i) {
         enterPane(i);
+        if (!isInk_) continue;
+        out << "inkpane\t" << i << "\t";
+        for (size_t k = 0; k < inkStrokes_.size(); ++k) {
+            if (k) out << "|";
+            for (auto& p : inkStrokes_[k]) out << p.x << "," << p.y << ";";
+        }
+        out << "\n";
+        for (auto& [key, label] : inkFix_) out << "inkfix\t" << i << "\t" << key << "\t" << label << "\n";
+    }
+    for (int i = 0; i < (int)panes_.size(); ++i) {
+        enterPane(i);
         if (!fractal_ || isNote_) continue;
         out << "fractalpane\t" << i << "\t" << (fracJulia_ ? 1 : 0) << "\t" << fracIter_ << "\t" << (fracAutoIter_ ? 1 : 0) << "\t"
             << fracPalette_ << "\t" << fracDensity_ << "\t" << homeScale_ << "\n";
@@ -472,6 +486,7 @@ bool App::loadProject(const std::string& path) {
         try {
             if (f[0] == "timeline" || f[0] == "key" || f[0] == "kpane") timelineLines.push_back(f);
             else if (f[0] == "fractalpane" && f.size() > 7) fractalLines.push_back(f);
+            else if ((f[0] == "inkpane" && f.size() > 2) || (f[0] == "inkfix" && f.size() > 3)) fractalLines.push_back(f);
             else if (f[0] == "fracc" && f.size() > 2) fracC_ = cplx(std::stod(f[1]), std::stod(f[2]));
             else if (f[0] == "name" && f.size() > 1) name = f[1];
             else if (f[0] == "note" && f.size() > 1) note = f[1];
@@ -598,6 +613,29 @@ bool App::loadProject(const std::string& path) {
         noteText_ = txt;
     }
     for (auto& f : fractalLines) {
+        if (f[0] == "inkpane" || f[0] == "inkfix") {
+            try {
+                const int pi = std::stoi(f[1]);
+                if (pi < 0 || pi >= (int)panes_.size()) continue;
+                enterPane(pi);
+                isInk_ = true;
+                if (f[0] == "inkfix") { inkFix_[f[2]] = f[3]; continue; }
+                std::stringstream ss(f[2]);
+                std::string stroke;
+                while (std::getline(ss, stroke, '|')) {
+                    std::vector<ImVec2> pts;
+                    std::stringstream ps(stroke);
+                    std::string pt;
+                    while (std::getline(ps, pt, ';')) {
+                        float x, y;
+                        if (std::sscanf(pt.c_str(), "%f,%f", &x, &y) == 2) pts.push_back(ImVec2(x, y));
+                    }
+                    if (!pts.empty()) inkStrokes_.push_back(pts);
+                }
+            } catch (...) {
+            }
+            continue;
+        }
         try {
             const int pi = std::stoi(f[1]);
             if (pi < 0 || pi >= (int)panes_.size()) continue;
