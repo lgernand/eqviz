@@ -5,6 +5,7 @@
 #include <cstring>
 #include <functional>
 #include <optional>
+#include <array>
 #include <map>
 #include <memory>
 #include <ostream>
@@ -249,6 +250,9 @@ enum : int { kCircSinCos = 1, kCircTan = 2, kCircCot = 4, kCircDegrees = 8, kCir
 enum : int { kMatGrid = 1, kMatBasis = 2, kMatDet = 4, kMatEigen = 8, kMatVector = 16, kMatTarget = 32,
              kMatDefault = kMatGrid | kMatBasis };
 
+// Vector / slope field options (bit flags)
+enum : int { kFieldArrows = 1, kFieldStream = 2, kFieldSolution = 4, kFieldDefault = kFieldArrows };
+
 #define EQVIZ_PANE_FIELDS(X)                                                                          \
     X(int, active_, 0) X(eq::NodeP, expr_, {}) X(eq::NodeP, dx_, {}) X(eq::NodeP, dy_, {})              \
     X(Func, f_, {}) X(Func, fx_, {}) X(Func, fy_, {}) X(Func, prev_, {})                                \
@@ -284,10 +288,13 @@ enum : int { kMatGrid = 1, kMatBasis = 2, kMatDet = 4, kMatEigen = 8, kMatVector
     X(int, fracPalette_, 0) X(float, fracDensity_, 1.f) X(std::string, fracStatus_, {})                 \
     X(uint64_t, fracViewHash_, 0) X(double, fracMoveT_, -10) X(ImVec2, fracCScreen_, {}) X(bool, fracCVisible_, false) \
     X(bool, unitCircle_, false) X(int, circleOpts_, kCircDefault) X(ImVec2, circleHandle_, {}) X(bool, draggingAngle_, false) \
-    X(std::string, trace_, {}) X(int, shadeRow_, -1) X(std::string, shadeLo_, {}) X(std::string, shadeHi_, {})           \
+    X(std::string, trace_, {}) X(bool, shadeQuiet_, false) X(int, shadeRow_, -1) X(std::string, shadeLo_, {}) X(std::string, shadeHi_, {})           \
     X(bool, matrix_, false) X(double, matA_, 1) X(double, matB_, 0) X(double, matC_, 0) X(double, matD_, 1)                 \
     X(int, matOpts_, kMatDefault) X(double, matVx_, 2) X(double, matVy_, 1) X(double, matBx_, 3) X(double, matBy_, 1)     \
-    X(float, matAnim_, 1.f) X(ImVec2, matHandle_, {}) X(bool, draggingVec_, false)
+    X(float, matAnim_, 1.f) X(ImVec2, matHandle_, {}) X(bool, draggingVec_, false)                          \
+    X(std::string, curveX_, {}) X(std::string, curveY_, {}) X(std::string, curveT0_, {}) X(std::string, curveT1_, {}) \
+    X(std::string, curveDot_, {}) X(std::string, fieldP_, {}) X(std::string, fieldQ_, {}) X(int, fieldOpts_, kFieldDefault) \
+    X(double, fieldSX_, 0) X(double, fieldSY_, 1) X(ImVec2, fieldHandle_, {}) X(bool, draggingSeed_, false)
 
 #define EQVIZ_DECLARE_FIELD(type, name, init) type name = init;
 
@@ -311,7 +318,12 @@ struct KeyPane {
     double vx = 2, vy = 1, bx = 3, by = 1;
     float probeX = 1;
     std::string trace, shadeLo, shadeHi;
+    std::string curveX, curveY, curveT0, curveT1, curveDot;  // parametric curve (variable t)
+    std::string fieldP, fieldQ;                              // vector field (variables x, y)
+    int fieldOpts = kFieldDefault;
+    double fieldSX = 0, fieldSY = 1;                         // seed of the solution curve
     int shadeRow = -1;
+    bool shadeQuiet = false;  // shade without the integral label
     int active = 0;
     std::set<int> hidden;  // row ids (row indices in project files)
     float noteScroll = 0;
@@ -355,7 +367,10 @@ struct LessonDef {
     std::function<void(App&)> setup;        // rows, sliders and panes (pane 0 is the lesson text)
     std::vector<LessonStep> steps;
     std::vector<TestQuestion> test;         // the end-of-lesson test
+    int passPct = 80;                       // score that counts as passing the test
+    std::string track;                      // lessons in one track follow each other ("Next lesson"); "" = same subject
 };
+int nextLessonIndex(int idx);  // the lesson after idx in its track or subject, or -1
 const std::vector<LessonDef>& lessonLibrary();
 std::vector<TestQuestion> lessonTests(const std::string& id);  // tests for the built-in lessons (lesson_tests.cpp)
 std::vector<LessonDef> millenniumLessons();                     // lessons_millennium.cpp
@@ -370,9 +385,11 @@ struct StepCtx {
     bool playSum = false;                   // run the summation player once arrived
     std::string question, answer, hint;     // optional check; answer is an expression
     double tol = 0.01;
+    std::map<int, std::array<double, 4>> fits;  // the last range asked of each pane (to refit)
     KeyPane& pane(int i);
     StepCtx& param(const std::string& name, double v);
-    StepCtx& fit(int pane, double x0, double x1, double y0, double y1);
+    StepCtx& fit(int pane, double x0, double x1, double y0, double y1, bool equalAxes = false);
+    StepCtx& refit(int pane, bool equalAxes);  // the same range again, e.g. after switching on a curve
     StepCtx& show(int pane, std::vector<int> rows);  // these rows are visible, the rest hidden
     StepCtx& active(int pane, int row);
     StepCtx& matrix(int pane, double a, double b, double c, double d);
@@ -657,6 +674,8 @@ public:
     void setTheta(double v);
     void effMatrix(double m[4]) const;  // the matrix as currently drawn (animating from the identity)
     void drawShade(ImDrawList* dl);
+    void drawParametric(ImDrawList* dl);
+    void drawField(ImDrawList* dl);
     void drawTrace(ImDrawList* dl);
     void drawUnitCircle(ImDrawList* dl);
     void drawMatrixScene(ImDrawList* dl);

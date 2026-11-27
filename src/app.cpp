@@ -846,8 +846,8 @@ void App::handleInput(float dt) {
             view_.s2w(m, wx, wy);
             fracC_ = cplx(wx, wy);
         }
-        if (!ImGui::IsMouseDown(0)) draggingProbe_ = panning_ = draggingC_ = draggingAngle_ = draggingVec_ = false;
-        if (draggingAngle_ || draggingVec_) {
+        if (!ImGui::IsMouseDown(0)) draggingProbe_ = panning_ = draggingC_ = draggingAngle_ = draggingVec_ = draggingSeed_ = false;
+        if (draggingAngle_ || draggingVec_ || draggingSeed_) {
             overlayMouse(m, false);
         } else if (draggingC_ && fractalHere) {
             double wx, wy;

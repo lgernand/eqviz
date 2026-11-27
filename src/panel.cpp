@@ -576,6 +576,7 @@ void App::drawOverlay(ImDrawList* dl) {
         const bool isActive = (int)i == active_;
         if (!d.body) continue;
         if (!isActive && (!rowVisible(d) || !only2D)) continue;  // complex / 3D views show only the active row
+        if (isActive && only2D && !rowVisible(d)) continue;     // a hidden row gets no card on a plain graph
         ts::Rename ren;
         if (complex_ && d.autoNamed) ren["x"] = "z";
         ImU32 c = col(d.color, !isActive && multi ? 0.85f : 1.f);

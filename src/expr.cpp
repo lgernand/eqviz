@@ -244,8 +244,11 @@ std::vector<Tok> lex(const std::string& s) {
                     j = k;
                 }
             }
+            std::string primes;  // f', y'' (derivative notation, used in notes)
+            while (j < s.size() && s[j] == '\'') { primes += '\''; ++j; }
             for (size_t p = 0; p < parts.size(); ++p) {
                 std::string name = parts[p];
+                if (p + 1 == parts.size()) name += primes;
                 if (p + 1 == parts.size() && !sub.empty()) name += "_" + sub;
                 push(T::Ident, pos, name);
             }

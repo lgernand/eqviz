@@ -102,6 +102,9 @@ Keyframe App::captureKeyframe(double t) {
         kp.shadeRow = shadeRow_;
         kp.shadeLo = shadeLo_;
         kp.shadeHi = shadeHi_;
+        kp.shadeQuiet = shadeQuiet_;
+        kp.curveX = curveX_; kp.curveY = curveY_; kp.curveT0 = curveT0_; kp.curveT1 = curveT1_; kp.curveDot = curveDot_;
+        kp.fieldP = fieldP_; kp.fieldQ = fieldQ_; kp.fieldOpts = fieldOpts_; kp.fieldSX = fieldSX_; kp.fieldSY = fieldSY_;
         kp.active = active_;
         kp.hidden = hiddenRows_;
         kp.noteScroll = noteScroll_;
@@ -195,7 +198,12 @@ void App::applyKeys(const std::vector<Keyframe>& keys_, double t, bool animate) 
         hiddenRows_ = a.hidden;
         domainColor_ = a.domainColor;
         if (a.fractal != fractal_ || (a.fractal && a.julia != fracJulia_)) setFractal(a.fractal, a.julia);
-        const bool paramsChange = a.unitCircle != unitCircle_ || a.trace != trace_ || a.shadeLo != shadeLo_ || a.shadeHi != shadeHi_;
+        const bool paramsChange = a.unitCircle != unitCircle_ || a.trace != trace_ || a.shadeLo != shadeLo_ || a.shadeHi != shadeHi_ ||
+                                  a.curveX != curveX_ || a.curveY != curveY_ || a.curveT0 != curveT0_ || a.curveT1 != curveT1_ ||
+                                  a.curveDot != curveDot_ || a.fieldP != fieldP_ || a.fieldQ != fieldQ_;
+        curveX_ = a.curveX; curveY_ = a.curveY; curveT0_ = a.curveT0; curveT1_ = a.curveT1; curveDot_ = a.curveDot;
+        fieldP_ = a.fieldP; fieldQ_ = a.fieldQ; fieldOpts_ = a.fieldOpts;
+        if (!draggingSeed_) { fieldSX_ = lerp(a.fieldSX, b.fieldSX, u); fieldSY_ = lerp(a.fieldSY, b.fieldSY, u); }
         unitCircle_ = a.unitCircle;
         matrix_ = a.matrix;
         circleOpts_ = a.circleOpts;
@@ -204,6 +212,7 @@ void App::applyKeys(const std::vector<Keyframe>& keys_, double t, bool animate) 
         shadeRow_ = a.shadeRow;
         shadeLo_ = a.shadeLo;
         shadeHi_ = a.shadeHi;
+        shadeQuiet_ = a.shadeQuiet;
         if (paramsChange) rebuildParams();  // panes can need sliders no row uses (theta, trace and bounds)
         if (!draggingVec_) {
             matA_ = lerp(a.mat[0], b.mat[0], u); matB_ = lerp(a.mat[1], b.mat[1], u);

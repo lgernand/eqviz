@@ -30,15 +30,22 @@ StepCtx& StepCtx::param(const std::string& name, double v) {
     return *this;
 }
 
-StepCtx& StepCtx::fit(int i, double x0, double x1, double y0, double y1) {
+StepCtx& StepCtx::refit(int i, bool equalAxes) {
+    auto it = fits.find(i);
+    if (it != fits.end()) fit(i, it->second[0], it->second[1], it->second[2], it->second[3], equalAxes);
+    return *this;
+}
+
+StepCtx& StepCtx::fit(int i, double x0, double x1, double y0, double y1, bool equalAxes) {
     if (i < 0 || i >= (int)k.panes.size() || i >= (int)app.paneRects_.size()) return *this;
+    fits[i] = {x0, x1, y0, y1};
     KeyPane& p = k.panes[i];
     const ImVec4 r = app.paneRects_[i];
     const double w = std::max(10.f, r.z - r.x), h = std::max(10.f, r.w - r.y);
     const double sx = w / std::max(1e-9, x1 - x0), sy = h / std::max(1e-9, y1 - y0);
     p.cx = 0.5 * (x0 + x1);
     p.cy = 0.5 * (y0 + y1);
-    if (p.complex || p.threeD || p.unitCircle || p.matrix) { p.scale = std::min(sx, sy); p.aspect = 1; }
+    if (equalAxes || p.complex || p.threeD || p.unitCircle || p.matrix) { p.scale = std::min(sx, sy); p.aspect = 1; }
     else { p.scale = sx; p.aspect = sy / sx; }
     if (p.threeD) {
         p.domainR = (float)std::max(x1 - x0, y1 - y0) * 0.5f;
@@ -207,6 +214,8 @@ void App::lessonMoveTo(Keyframe to, float dur, bool animate) {
         f.fractal = t.fractal; f.julia = t.julia; f.unitCircle = t.unitCircle; f.matrix = t.matrix;
         f.circleOpts = t.circleOpts; f.matOpts = t.matOpts; f.trace = t.trace; f.shadeRow = t.shadeRow;
         f.shadeLo = t.shadeLo; f.shadeHi = t.shadeHi; f.active = t.active; f.hidden = t.hidden;
+        f.curveX = t.curveX; f.curveY = t.curveY; f.curveT0 = t.curveT0; f.curveT1 = t.curveT1; f.curveDot = t.curveDot;
+        f.fieldP = t.fieldP; f.fieldQ = t.fieldQ; f.fieldOpts = t.fieldOpts; f.shadeQuiet = t.shadeQuiet;
         if (t.matrix && !f.matrix) { for (int m = 0; m < 4; ++m) f.mat[m] = (m == 0 || m == 3) ? 1 : 0; }
     }
     from.t = 0;
@@ -307,7 +316,7 @@ void App::finishTest() {
     saveSettings();
     std::string text = "# Test results\n\n";
     text += "**You scored " + std::to_string(score) + " out of " + std::to_string(n) + ".** ";
-    text += score == n ? "Every answer right. Well done!" : score * 5 >= n * 4 ? "A pass: well done." : "Have another look at the steps below, then try again.";
+    text += score == n ? "Every answer right. Well done!" : score * 100 >= n * L.passPct ? "A pass: well done." : "Have another look at the steps below, then try again.";
     text += "\n\n";
     for (int i = 0; i < n; ++i) {
         const TestQuestion& t = L.test[i];
@@ -390,7 +399,7 @@ void App::drawLessonBar() {
         const int nq = (int)L.test.size();
         int nextLesson = -1;
         for (int i = lessonIdx_ + 1; i < (int)lessonLibrary().size(); ++i)
-            if (lessonLibrary()[i].subject == L.subject) { nextLesson = i; break; }
+            if (i == nextLessonIndex(lessonIdx_)) { nextLesson = i; break; }
         ImGui::AlignTextToFramePadding();
         ImGui::PushFont(fonts_.uiBold, 15.f);
         ImGui::TextColored(colv(GOLD_C), testDone_ ? "TEST RESULTS" : "TEST");
@@ -541,7 +550,7 @@ void App::drawLessonBar() {
     if (last) {
         const auto& lib = lessonLibrary();
         for (int i = lessonIdx_ + 1; i < (int)lib.size(); ++i)
-            if (lib[i].subject == L.subject) { nextLesson = i; break; }
+            if (i == nextLessonIndex(lessonIdx_)) { nextLesson = i; break; }
     }
     const bool hasTest = !L.test.empty();
     const float nextW = last ? (hasTest || nextLesson >= 0 ? 150.f : 96.f) : 96.f;
@@ -602,25 +611,50 @@ void App::drawLessonBar() {
 
 // ------------------------------------------------------------------ the library (panel popup)
 
+int nextLessonIndex(int idx) {
+    const auto& lib = lessonLibrary();
+    if (idx < 0 || idx + 1 >= (int)lib.size()) return -1;
+    const LessonDef& L = lib[idx];
+    for (int i = idx + 1; i < (int)lib.size(); ++i) {
+        if (!L.track.empty() && lib[i].track == L.track) return i;
+        if (L.track.empty() && lib[i].subject == L.subject) return i;
+    }
+    return -1;
+}
+
 void App::drawLessonLibrary() {
     const auto& lib = lessonLibrary();
     std::string subject;
+    bool open = true;
     for (int i = 0; i < (int)lib.size(); ++i) {
         const LessonDef& L = lib[i];
-        if (L.subject != subject) {
+        if (L.subject != subject) {  // one collapsible section per subject
             subject = L.subject;
-            ImGui::Spacing();
+            int count = 0, passed = 0;
+            for (const LessonDef& M : lib) {
+                if (M.subject != subject) continue;
+                ++count;
+                const auto tb = lessonTestBest_.find(M.id);
+                if (tb != lessonTestBest_.end() && tb->second.second > 0 && tb->second.first * 100 >= tb->second.second * M.passPct) ++passed;
+            }
+            const bool here = lessonIdx_ >= 0 && lib[lessonIdx_].subject == subject;
+            ImGui::SetNextItemOpen(here || (lessonIdx_ < 0 && i == 0), ImGuiCond_Appearing);
+            char head[192];
+            std::snprintf(head, sizeof head, "%s   (%d/%d passed)###%s", subject.c_str(), passed, count, subject.c_str());
             ImGui::PushFont(fonts_.uiBold, 14.f);
-            ImGui::TextColored(colv(BLUE_C), "%s", subject.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Text, colv(BLUE_C));
+            open = ImGui::CollapsingHeader(head);
+            ImGui::PopStyleColor();
             ImGui::PopFont();
         }
+        if (!open) continue;
         const int best = lessonProgress_.count(L.id) ? lessonProgress_.at(L.id) : 0;
         const int n = (int)L.steps.size();
         char right[48];
         bool done = false;
         const auto tb = lessonTestBest_.find(L.id);
         if (tb != lessonTestBest_.end() && tb->second.second > 0) {
-            done = tb->second.first * 5 >= tb->second.second * 4;  // 80% passes
+            done = tb->second.first * 100 >= tb->second.second * L.passPct;
             std::snprintf(right, sizeof right, "%stest %d/%d", done ? "\xE2\x9C\x93 " : "", tb->second.first, tb->second.second);
         } else if (best >= n) std::snprintf(right, sizeof right, L.test.empty() ? "\xE2\x9C\x93" : "test to take");
         else if (best > 0) std::snprintf(right, sizeof right, "%d / %d", best, n);

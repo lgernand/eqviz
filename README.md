@@ -107,6 +107,29 @@ as `0.5`, `sqrt(3)/2` or `2pi/3`, and come with hints. Move between steps with *
   classes), the Poincaré conjecture (Ricci flow with surgery) and Birch and Swinnerton-Dyer (rank and counting
   points mod p).
 
+**The calculus course.** A complete course from limits to differential equations, built from the "Calculus: From Limits
+to Differential Equations" lesson plan:
+- a course guide and placement test
+- the optional Unit 0 bridge on rigorous limits
+- Units 1–18 in five parts (derivatives; integrals; series, polar coordinates and Euler's formula; multivariable and vector calculus; differential equations)
+- a midterm and a final
+
+Each unit follows the plan's order:
+- an overview, then the story of the people behind the ideas
+- the ideas themselves, with live graphs and checks
+- the readings (Simmons, Spivak, Boyce & DiPrima, Strogatz and the history shelf)
+- the milestone proofs to write closed-book
+- the plan's written unit test, to grade with your tutor
+
+A quick check with fresh problems ends each unit, so the written tests stay sealed; it needs 85% to pass. **Next lesson** runs
+straight through the course, and the lesson list shows each part's progress.
+
+The course adds two teaching tools for real-axes panes, also in the panel's **Graph** section:
+- **Parametric curve:** (x(t), y(t)), including polar curves, with an optional point travelling along it and its velocity arrow.
+- **Vector / slope field:** arrows of (P, Q); with P = 1 it is the slope field of dy/dx = Q. Flow lines give phase portraits, and a draggable point shows the solution through it.
+
+Formulas in notes can use primes: f′(x), y″.
+
 **Tests.** Every lesson ends with a short test: **Take the test** on the last step. The questions mix typed
 answers and multiple choice, and some set up their own picture. Your first answer to each question counts. A
 wrong answer shows the right one and the step to review. The results screen lists every question with its
@@ -262,7 +285,8 @@ and has two or more keyframes).
 | `src/notes.cpp`, `src/demo_notes.cpp` | note panes (markup, layout, editor) and the demos' explanations |
 | `src/timeline.cpp`, `src/video*` | keyframes, playback, timeline strip; MP4 writer (AVFoundation) |
 | `src/lesson.cpp`, `src/lessons_content.cpp`, `src/lessons_millennium.cpp`, `src/lesson_tests.cpp` | lesson engine (steps, transitions, questions, tests, progress) and the lessons |
-| `src/overlays.cpp` | unit circle, matrix transformation, trace line and shaded area |
+| `src/overlays.cpp` | unit circle, matrix transformation, trace line, shaded area, parametric curves, vector and slope fields |
+| `src/lesson_kit.hpp`, `src/lessons_course*.cpp` | helpers for writing lessons; the calculus course (placement, Units 0–18, midterm, final) |
 | `src/fractal.cpp` | fractal mode: escape-time iteration, CPU double-precision renderer, orbits, panel section |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
 | `src/project.cpp` | functions list, calls between rows, save/open, demo project |

@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <array>
+#include <map>
 #include <numeric>
 
 #include "app.hpp"
@@ -99,30 +101,73 @@ double evalScalar(const std::string& src, const std::vector<Param>& ps, const st
     return std::fabs(v.imag()) < 1e-9 ? v.real() : NAN;
 }
 
+
+// An expression in x, y and t (and the sliders), compiled once and evaluated many times.
+struct XYT {
+    eq::Program prog;
+    std::vector<int> map;  // -1 x, -2 y, -5 t, >= 0 slider, -3 zero
+    bool ok = false;
+    XYT(const std::string& src, const std::vector<Param>& ps) {
+        if (src.empty()) return;
+        eq::ParseResult r = eq::parse(src);
+        if (!r.root) return;
+        prog = eq::Program(r.root);
+        if (!prog.valid()) return;
+        for (const auto& n : prog.slotNames()) {
+            int m = -3;
+            if (n == "x") m = -1;
+            else if (n == "y") m = -2;
+            else if (n == "t") m = -5;
+            for (size_t k = 0; k < ps.size(); ++k)
+                if (ps[k].name == n && n != "x" && n != "y") m = (int)k;
+            map.push_back(m);
+        }
+        ok = true;
+    }
+    double operator()(double x, double y, double t, const std::vector<double>& pv) const {
+        cplx slots[64];
+        const int n = std::min(prog.numSlots(), 64);
+        for (int i = 0; i < n; ++i) {
+            const int m = map[i];
+            slots[i] = cplx(m == -1 ? x : m == -2 ? y : m == -5 ? t : m >= 0 && m < (int)pv.size() ? pv[m] : 0.0, 0);
+        }
+        const cplx v = prog.eval(slots, INFINITY, true, 2048);
+        return std::fabs(v.imag()) < 1e-9 * std::max(1.0, std::fabs(v.real())) ? v.real() : NAN;
+    }
+};
+
 }  // namespace
 
 // ------------------------------------------------------------------ helpers
 
 double App::paneScalar(const std::string& src) const { return evalScalar(src, params_, pvals_); }
 
-void App::paneParamNames(std::set<std::string>& names) const {
-    auto add = [&](const std::string& src) {
+// sliders a pane's overlays need (both App, for the current pane, and PaneState have these members)
+template <class P>
+static void overlayNames(const P& p, std::set<std::string>& names) {
+    auto add = [&](const std::string& src, std::initializer_list<const char*> own) {
         if (src.empty()) return;
         eq::ParseResult r = eq::parse(src);
-        if (r.root) eq::freeVars(r.root, names);
+        if (!r.root) return;
+        std::set<std::string> v;
+        eq::freeVars(r.root, v);
+        for (const char* o : own) v.erase(o);  // the overlay's own variables are not sliders
+        names.insert(v.begin(), v.end());
     };
-    auto visit = [&](bool note, bool circle, const std::string& tr, const std::string& lo, const std::string& hi, int shade) {
-        if (note) return;
-        if (circle) names.insert("theta");
-        add(tr);
-        if (shade >= 0) { add(lo); add(hi); }
-    };
-    visit(isNote_, unitCircle_, trace_, shadeLo_, shadeHi_, shadeRow_);
-    for (int i = 0; i < (int)panes_.size(); ++i) {
-        if (i == cur_) continue;
-        const PaneState& p = panes_[i];
-        visit(p.isNote_, p.unitCircle_, p.trace_, p.shadeLo_, p.shadeHi_, p.shadeRow_);
+    if (p.isNote_) return;
+    if (p.unitCircle_) names.insert("theta");
+    add(p.trace_, {});
+    if (p.shadeRow_ >= 0) { add(p.shadeLo_, {}); add(p.shadeHi_, {}); }
+    if (!p.curveX_.empty()) {
+        add(p.curveX_, {"t"}); add(p.curveY_, {"t"}); add(p.curveT0_, {}); add(p.curveT1_, {}); add(p.curveDot_, {});
     }
+    if (!p.fieldP_.empty()) { add(p.fieldP_, {"x", "y"}); add(p.fieldQ_, {"x", "y"}); }
+}
+
+void App::paneParamNames(std::set<std::string>& names) const {
+    overlayNames(*this, names);
+    for (int i = 0; i < (int)panes_.size(); ++i)
+        if (i != cur_) overlayNames(panes_[i], names);
 }
 
 double App::thetaValue() const {
@@ -179,6 +224,7 @@ void App::drawShade(ImDrawList* dl) {
         const double y = F(xb);
         if (std::isfinite(y)) dl->AddLine(view_.w2s(xb, 0), view_.w2s(xb, y), col(d.color, 0.8f), 1.5f);
     }
+    if (shadeQuiet_) return;
     // the integral (midpoint rule, fine enough for step functions too)
     const int N = 6000;
     double sum = 0;
@@ -525,6 +571,178 @@ void App::drawMatrixScene(ImDrawList* dl) {
     }
 }
 
+
+// ------------------------------------------------------------------ parametric curve
+
+void App::drawParametric(ImDrawList* dl) {
+    if (curveX_.empty() || curveY_.empty()) return;
+    const XYT X(curveX_, params_), Y(curveY_, params_);
+    if (!X.ok || !Y.ok) return;
+    double t0 = paneScalar(curveT0_.empty() ? "0" : curveT0_), t1 = paneScalar(curveT1_.empty() ? "2pi" : curveT1_);
+    if (!std::isfinite(t0) || !std::isfinite(t1) || t1 == t0) return;
+    const bool hasDot = !curveDot_.empty();
+    const double td = hasDot ? paneScalar(curveDot_) : t1;
+    const int N = 1200;
+    std::vector<ImVec2> pts;
+    auto flush = [&](ImU32 c, float th) {
+        if (pts.size() > 1) dl->AddPolyline(pts.data(), (int)pts.size(), c, th, 0);
+        pts.clear();
+    };
+    // the full curve (faint when a point travels along it), then the part already traced
+    for (int pass = 0; pass < (hasDot ? 2 : 1); ++pass) {
+        const double a = t0, b = pass == 0 ? t1 : std::clamp(td, std::min(t0, t1), std::max(t0, t1));
+        const ImU32 c = pass == 0 ? col(YELLOW_C, hasDot ? 0.3f : 1.f) : col(YELLOW_C);
+        const float th = pass == 0 ? (hasDot ? 2.f : 3.f) : 3.5f;
+        const int n = std::max(2, (int)(N * std::fabs(b - a) / std::max(1e-12, std::fabs(t1 - t0))));
+        ImVec2 prev(0, 0);
+        for (int i = 0; i <= n; ++i) {
+            const double t = a + (b - a) * i / n;
+            const double x = X(0, 0, t, pvals_), y = Y(0, 0, t, pvals_);
+            if (!std::isfinite(x) || !std::isfinite(y)) { flush(c, th); continue; }
+            const ImVec2 q = view_.w2s(x, y);
+            if (!pts.empty() && std::hypot(q.x - prev.x, q.y - prev.y) > 400) flush(c, th);  // a jump, not a stroke
+            pts.push_back(q);
+            prev = q;
+        }
+        flush(c, th);
+    }
+    if (hasDot && std::isfinite(td)) {
+        const double x = X(0, 0, td, pvals_), y = Y(0, 0, td, pvals_);
+        if (std::isfinite(x) && std::isfinite(y)) {
+            const double h = 1e-4 * std::max(1.0, std::fabs(td));
+            const double vx = (X(0, 0, td + h, pvals_) - X(0, 0, td - h, pvals_)) / (2 * h);
+            const double vy = (Y(0, 0, td + h, pvals_) - Y(0, 0, td - h, pvals_)) / (2 * h);
+            const ImVec2 P = view_.w2s(x, y);
+            if (std::isfinite(vx) && std::isfinite(vy)) {  // velocity, scaled to a readable length
+                const double sp = std::hypot(vx, vy);
+                if (sp > 1e-12) {
+                    const double L = 60.0 / view_.scale;  // 60 px
+                    arrow(dl, P, view_.w2s(x + vx / sp * L, y + vy / sp * L), col(GREEN_C), 3.f);
+                }
+            }
+            dl->AddCircleFilled(P, 6.5f, col(YELLOW_C));
+            const float s = 16.f * labelScale_;
+            label(dl, ts::hcat({ts::ident("t", s), ts::binop("=", s), ts::text(ts::fmtNum(td, 4), s), ts::space(10),
+                                ts::parens(ts::text(ts::fmtNum(x, 4) + ", " + ts::fmtNum(y, 4), s * 0.9f), s * 0.9f)}),
+                  ImVec2(P.x + 12, P.y - 12), col(YELLOW_C));
+        }
+    }
+}
+
+// ------------------------------------------------------------------ vector / slope field
+
+void App::drawField(ImDrawList* dl) {
+    if (fieldP_.empty() || fieldQ_.empty()) return;
+    const XYT P(fieldP_, params_), Q(fieldQ_, params_);
+    if (!P.ok || !Q.ok) return;
+    const bool slope = fieldP_ == "1";  // dy/dx = Q: short segments, no arrowheads
+    double wx0, wy0, wx1, wy1;
+    view_.s2w(canvasMin_, wx0, wy1);
+    view_.s2w(canvasMax_, wx1, wy0);
+    const float cw = canvasMax_.x - canvasMin_.x, ch = canvasMax_.y - canvasMin_.y;
+    if (fieldOpts_ & kFieldArrows) {
+        const float sp = 34.f;
+        const int nx = std::max(2, (int)(cw / sp)), ny = std::max(2, (int)(ch / sp));
+        std::vector<double> mags;
+        std::vector<std::array<double, 4>> v;
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i) {
+                const ImVec2 s0(canvasMin_.x + (i + 0.5f) * cw / nx, canvasMin_.y + (j + 0.5f) * ch / ny);
+                double x, y;
+                view_.s2w(s0, x, y);
+                const double p = P(x, y, 0, pvals_), q = Q(x, y, 0, pvals_);
+                if (!std::isfinite(p) || !std::isfinite(q)) continue;
+                v.push_back({(double)s0.x, (double)s0.y, p, q});
+                mags.push_back(std::hypot(p, q * view_.aspect));
+            }
+        std::vector<double> sorted = mags;
+        std::sort(sorted.begin(), sorted.end());
+        const double ref = sorted.empty() ? 1 : std::max(1e-12, sorted[(size_t)(sorted.size() * 0.9) < sorted.size() ? (size_t)(sorted.size() * 0.9) : sorted.size() - 1]);
+        for (size_t k = 0; k < v.size(); ++k) {
+            const double p = v[k][2], q = v[k][3] * view_.aspect;  // screen-space direction (y flipped below)
+            const double m = mags[k];
+            if (m < 1e-12) { dl->AddCircleFilled(ImVec2((float)v[k][0], (float)v[k][1]), 1.5f, col(BLUE_C, 0.6f)); continue; }
+            const double ux = p / m, uy = -q / m;
+            const float len = slope ? sp * 0.62f : (float)(sp * 0.8 * std::clamp(0.35 + 0.65 * m / ref, 0.35, 1.0));
+            const float a = slope ? 0.65f : (float)std::clamp(0.35 + 0.6 * m / ref, 0.35, 0.95);
+            const ImVec2 c((float)v[k][0], (float)v[k][1]);
+            const ImVec2 a0(c.x - (float)ux * len * 0.5f, c.y - (float)uy * len * 0.5f), a1(c.x + (float)ux * len * 0.5f, c.y + (float)uy * len * 0.5f);
+            if (slope) dl->AddLine(a0, a1, col(BLUE_C, a), 1.6f);
+            else arrow(dl, a0, a1, col(BLUE_C, a), 1.6f);
+        }
+    }
+    // integrate along the field's direction (arc length) from a point, both ways
+    auto trace = [&](double x, double y, int steps, double ds, std::vector<ImVec2>& out) {
+        std::vector<ImVec2> back, fwd;
+        for (int dir = -1; dir <= 1; dir += 2) {
+            double cx = x, cy = y;
+            auto& o = dir < 0 ? back : fwd;
+            for (int k = 0; k < steps; ++k) {
+                auto f = [&](double px, double py, double& dx, double& dy) {
+                    const double p = P(px, py, 0, pvals_), q = Q(px, py, 0, pvals_);
+                    const double m = std::hypot(p, q);
+                    if (!std::isfinite(m) || m < 1e-12) return false;
+                    dx = dir * p / m; dy = dir * q / m;
+                    return true;
+                };
+                double k1x, k1y, k2x, k2y, k3x, k3y, k4x, k4y;
+                if (!f(cx, cy, k1x, k1y) || !f(cx + 0.5 * ds * k1x, cy + 0.5 * ds * k1y, k2x, k2y) ||
+                    !f(cx + 0.5 * ds * k2x, cy + 0.5 * ds * k2y, k3x, k3y) || !f(cx + ds * k3x, cy + ds * k3y, k4x, k4y))
+                    break;
+                cx += ds / 6 * (k1x + 2 * k2x + 2 * k3x + k4x);
+                cy += ds / 6 * (k1y + 2 * k2y + 2 * k3y + k4y);
+                if (cx < wx0 - (wx1 - wx0) || cx > wx1 + (wx1 - wx0) || cy < wy0 - (wy1 - wy0) || cy > wy1 + (wy1 - wy0)) break;
+                o.push_back(view_.w2s(cx, cy));
+            }
+        }
+        out.assign(back.rbegin(), back.rend());
+        out.push_back(view_.w2s(x, y));
+        out.insert(out.end(), fwd.begin(), fwd.end());
+    };
+    if (fieldOpts_ & kFieldStream) {  // a phase portrait: curves from a grid of seeds (cached per view)
+        static std::map<uint64_t, std::vector<std::vector<ImVec2>>> cache;
+        Hasher h;
+        for (char c : fieldP_ + "|" + fieldQ_) h.u((uint64_t)(unsigned char)c);
+        for (double v : pvals_) h.d(v);
+        h.d(view_.cx); h.d(view_.cy); h.d(view_.scale); h.d(view_.aspect); h.d(canvasMin_.x); h.d(canvasMin_.y); h.d(cw); h.d(ch);
+        auto it = cache.find(h.h);
+        if (it == cache.end()) {
+            if (cache.size() > 32) cache.clear();
+            std::vector<std::vector<ImVec2>> lines;
+            const int nx = std::max(2, (int)(cw / 95)), ny = std::max(2, (int)(ch / 95));
+            const double ds = 2.5 / view_.scale;
+            for (int j = 0; j < ny; ++j)
+                for (int i = 0; i < nx; ++i) {
+                    double x, y;
+                    view_.s2w(ImVec2(canvasMin_.x + (i + 0.5f) * cw / nx, canvasMin_.y + (j + 0.5f) * ch / ny), x, y);
+                    std::vector<ImVec2> l;
+                    trace(x, y, 260, ds, l);
+                    lines.push_back(std::move(l));
+                }
+            it = cache.emplace(h.h, std::move(lines)).first;
+        }
+        for (const auto& l : it->second) {
+            if (l.size() < 2) continue;
+            dl->AddPolyline(l.data(), (int)l.size(), col(WHITE, 0.32f), 1.3f, 0);
+            const size_t m = l.size() / 2;  // a small arrowhead mid-way shows the direction of travel
+            if (m + 1 < l.size()) arrow(dl, l[m - (m > 0 ? 1 : 0)], l[m + 1], col(WHITE, 0.5f), 1.3f);
+        }
+    }
+    if (fieldOpts_ & kFieldSolution) {  // the solution through a draggable point
+        std::vector<ImVec2> l;
+        trace(fieldSX_, fieldSY_, 2400, 1.5 / view_.scale, l);
+        if (l.size() > 1) dl->AddPolyline(l.data(), (int)l.size(), col(YELLOW_C), 3.f, 0);
+        const ImVec2 S = view_.w2s(fieldSX_, fieldSY_);
+        const ImVec2 m = ImGui::GetIO().MousePos;
+        const bool hot = draggingSeed_ || (std::hypot(m.x - S.x, m.y - S.y) < 14 && canHover());
+        dl->AddCircleFilled(S, hot ? 8.f : 6.f, col(YELLOW_C));
+        dl->AddCircle(S, hot ? 12.f : 10.f, col(BG, 0.9f), 24, 2.f);
+        fieldHandle_ = S;
+        const float s = 15.f * labelScale_;
+        label(dl, ts::parens(ts::text(ts::fmtNum(fieldSX_, 3) + ", " + ts::fmtNum(fieldSY_, 3), s), s), ImVec2(S.x + 12, S.y + 22), col(YELLOW_C));
+    }
+}
+
 // ------------------------------------------------------------------ input
 
 bool App::overlayMouse(ImVec2 m, bool clicked) {
@@ -532,6 +750,7 @@ bool App::overlayMouse(ImVec2 m, bool clicked) {
     if (clicked) {
         if (unitCircle_ && std::hypot(m.x - circleHandle_.x, m.y - circleHandle_.y) < 16) { draggingAngle_ = true; return true; }
         if (matrix_ && (matOpts_ & kMatVector) && std::hypot(m.x - matHandle_.x, m.y - matHandle_.y) < 16) { draggingVec_ = true; return true; }
+        if (!fieldP_.empty() && (fieldOpts_ & kFieldSolution) && std::hypot(m.x - fieldHandle_.x, m.y - fieldHandle_.y) < 16) { draggingSeed_ = true; return true; }
     }
     if (draggingAngle_) {
         double wx, wy;
@@ -547,6 +766,10 @@ bool App::overlayMouse(ImVec2 m, bool clicked) {
             }
         }
         setTheta(t);
+        return true;
+    }
+    if (draggingSeed_) {
+        view_.s2w(m, fieldSX_, fieldSY_);
         return true;
     }
     if (draggingVec_) {
@@ -652,6 +875,62 @@ void App::drawOverlaySection() {
             if (ImGui::DragScalarN("##b", ImGuiDataType_Double, v, 2, 0.01f, nullptr, nullptr, "%.2f")) { matBx_ = v[0]; matBy_ = v[1]; }
         }
         ImGui::Unindent(12);
+    }
+    {   // parametric curve
+        bool on = !curveX_.empty();
+        if (ImGui::Checkbox("Parametric curve", &on)) {
+            if (on) { curveX_ = "cos(3t)"; curveY_ = "sin(2t)"; curveT0_ = "0"; curveT1_ = "2pi"; }
+            else curveX_.clear();
+            rebuildParams();
+        }
+        ImGui::SetItemTooltip("A curve (x(t), y(t)). For a polar curve r(t), use x = r(t) cos(t), y = r(t) sin(t)");
+        if (!curveX_.empty()) {
+            ImGui::Indent(12);
+            bool ch = false;
+            const float w = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
+            ImGui::SetNextItemWidth(w);
+            ch |= ImGui::InputTextWithHint("##cx", "x(t)", &curveX_);
+            ImGui::SameLine(0, 6);
+            ImGui::SetNextItemWidth(w);
+            ch |= ImGui::InputTextWithHint("##cy", "y(t)", &curveY_);
+            ImGui::SetNextItemWidth(w * 0.62f);
+            ch |= ImGui::InputTextWithHint("##ct0", "t from", &curveT0_);
+            ImGui::SameLine(0, 6);
+            ImGui::SetNextItemWidth(w * 0.62f);
+            ch |= ImGui::InputTextWithHint("##ct1", "t to", &curveT1_);
+            ImGui::SameLine(0, 6);
+            ImGui::SetNextItemWidth(-1);
+            ch |= ImGui::InputTextWithHint("##cdot", "point at t", &curveDot_);
+            ImGui::SetItemTooltip("Optional: a point travels along the curve at this t (a number or a slider name)");
+            if (ch) rebuildParams();
+            ImGui::Unindent(12);
+        }
+    }
+    {   // vector or slope field
+        bool on = !fieldP_.empty();
+        if (ImGui::Checkbox("Vector / slope field", &on)) {
+            if (on) { fieldP_ = "1"; fieldQ_ = "x - y"; fieldOpts_ = kFieldArrows | kFieldSolution; }
+            else fieldP_.clear();
+            rebuildParams();
+        }
+        ImGui::SetItemTooltip("Arrows of (P(x, y), Q(x, y)). With P = 1 it is the slope field of dy/dx = Q");
+        if (!fieldP_.empty()) {
+            ImGui::Indent(12);
+            const float w = (ImGui::GetContentRegionAvail().x - 6) * 0.5f;
+            bool ch = false;
+            ImGui::SetNextItemWidth(w);
+            ch |= ImGui::InputTextWithHint("##fp", "P(x, y)", &fieldP_);
+            ImGui::SameLine(0, 6);
+            ImGui::SetNextItemWidth(w);
+            ch |= ImGui::InputTextWithHint("##fq", "Q(x, y)", &fieldQ_);
+            if (ch) rebuildParams();
+            const float half = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x * 0.5f;
+            flag("Arrows", fieldOpts_, kFieldArrows);
+            ImGui::SameLine(half);
+            flag("Flow lines", fieldOpts_, kFieldStream);
+            flag("Solution through a point (drag it)", fieldOpts_, kFieldSolution);
+            ImGui::Unindent(12);
+        }
     }
     {   // trace
         labelRow("Trace  x =", 110);

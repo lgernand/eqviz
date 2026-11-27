@@ -117,8 +117,11 @@ Box ident(const std::string& full, float size) {
         base = full.substr(0, us);
         sub = full.substr(us + 1);
     }
+    int primes = 0;  // f' -> f with a prime mark
+    while (!base.empty() && base.back() == '\'') { base.pop_back(); ++primes; }
     Box b = gItalic ? textF(italicize(base), size, gItalic) : text(italicize(base), size);
     b.w += 0.04f * size;  // italic correction
+    if (primes) b = hcat({b, text(primes == 1 ? "\xE2\x80\xB2" : primes == 2 ? "\xE2\x80\xB3" : "\xE2\x80\xB4", size)});
     if (!sub.empty()) {
         bool digits = std::all_of(sub.begin(), sub.end(), [](unsigned char c) { return std::isdigit(c); });
         Box s = digits ? text(sub, size * 0.7f) : (gItalic ? textF(italicize(sub), size * 0.7f, gItalic) : text(italicize(sub), size * 0.7f));

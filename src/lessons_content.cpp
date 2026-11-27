@@ -2,6 +2,7 @@
 // Each lesson sets up rows, sliders and panes (pane 0 holds the text), then lists steps.
 // A step's `set` changes the target state; steps build on the ones before them.
 #include "app.hpp"
+#include "lesson_kit.hpp"
 #include "theme.hpp"
 
 using namespace theme;
@@ -884,6 +885,7 @@ const std::vector<LessonDef>& lessonLibrary() {
             laVectors(),   laTransform(),    laDeterminant(), laSystems(),   laEigen(),
         };
         for (LessonDef& m : millenniumLessons()) v.push_back(std::move(m));
+        for (LessonDef& c : calculusCourse()) v.push_back(std::move(c));
         for (LessonDef& L : v)
             if (L.test.empty()) L.test = lessonTests(L.id);
         return v;

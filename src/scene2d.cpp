@@ -845,7 +845,9 @@ void App::drawScene2D(ImDrawList* dl) {
         drawMatrixScene(dl);
     } else {
         drawShade(dl);
+        drawField(dl);
         drawRealCurves(dl, a);
+        drawParametric(dl);
         drawTrace(dl);
         if (unitCircle_) drawUnitCircle(dl);
     }
