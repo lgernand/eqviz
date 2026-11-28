@@ -238,6 +238,7 @@ struct NoteItem {
     int role = 0;  // 0 body, 1 heading, 2 maths, 3 accent
     std::string s;
     ts::Box box;
+    std::string link;  // a [label](target) link: where clicking goes
 };
 using NoteItems = std::vector<NoteItem>;
 
@@ -388,12 +389,16 @@ struct LessonDef {
     std::vector<TestQuestion> test;         // the end-of-lesson test
     int passPct = 80;                       // score that counts as passing the test
     std::string track;                      // lessons in one track follow each other ("Next lesson"); "" = same subject
+    std::vector<std::string> prereqs;       // lesson ids to know first (linked from the first step)
 };
 int nextLessonIndex(int idx);  // the lesson after idx in its track or subject, or -1
 const std::vector<LessonDef>& lessonLibrary();
+std::string autoMath(const std::string& text);  // plain-Unicode maths in prose wrapped in $…$ where it parses (automath.cpp)
+void richTextLine(const std::string& s, ImU32 textCol, ImU32 mathCol);  // one line with inline $maths$ at the ImGui cursor (notes.cpp)
 std::string lessonSymbols(const LessonDef& L, int step);  // "## Symbols" definitions for symbols this step introduces, or "" (lesson_symbols.cpp)
 std::vector<TestQuestion> lessonTests(const std::string& id);  // tests for the built-in lessons (lesson_tests.cpp)
-std::vector<LessonDef> millenniumLessons();                     // lessons_millennium.cpp
+std::vector<LessonDef> millenniumLessons();
+std::vector<LessonDef> precalcLessons();  // lessons_precalc.cpp                     // lessons_millennium.cpp
 
 // Passed to a step's `set`: edits the step's target keyframe.
 struct StepCtx {
@@ -686,6 +691,9 @@ public:
     void lessonText(const std::string& text);
     float lessonBarH() const;
     void startLesson(int idx);
+    void openLink(const std::string& target);  // "lesson:<id>" opens that lesson (Back returns here)
+    std::string pendingLink_;                  // a note link clicked this frame, opened next frame
+    std::vector<std::pair<int, int>> lessonBack_;  // lessons (index, step) left by following links
     void lessonGo(int step, bool animate);
     void updateLesson(float dt);
     void drawLessonBar();

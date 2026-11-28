@@ -3,6 +3,7 @@
 // be reached from anywhere. Moving between steps plays a short transition through the same
 // keyframe machinery as the timeline: mode switches start at once, views and sliders ease.
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -147,12 +148,27 @@ void App::startLesson(int idx) {
     }
     enterPane(focus_);
     lessonIdx_ = idx;
+    lessonBack_.clear();
     lessonBase_ = captureKeyframe(0);
     lessonPending_ = true;  // go to step 0 next frame, once pane sizes are known
     lessonStep_ = 0;
 }
 
+void App::openLink(const std::string& target) {
+    if (target.rfind("lesson:", 0) != 0) return;
+    const auto& lib = lessonLibrary();
+    for (int i = 0; i < (int)lib.size(); ++i)
+        if (lib[i].id == target.substr(7)) {
+            std::vector<std::pair<int, int>> back = lessonBack_;
+            if (lessonIdx_ >= 0 && lessonIdx_ != i) back.push_back({lessonIdx_, lessonStep_});
+            startLesson(i);
+            lessonBack_ = back;
+            return;
+        }
+}
+
 void App::exitLesson() {
+    lessonBack_.clear();
     lessonIdx_ = -1;
     testing_ = testDone_ = false;
     lessonPlaying_ = false;
@@ -185,7 +201,7 @@ void App::lessonText(const std::string& text) {
     const int keep = cur_;
     enterPane(0);
     if (isNote_) {
-        noteText_ = text;
+        noteText_ = autoMath(text);
         noteScroll_ = 0;
     }
     enterPane(keep);
@@ -235,7 +251,19 @@ void App::lessonGo(int step, bool animate) {
     StepCtx out{*this, lessonBase_};
     Keyframe to = lessonTarget(step, &out, nullptr);
     {
-        std::string text = "# " + L.steps[step].title + "\n\n" + L.steps[step].text;
+        std::string text = "# " + L.steps[step].title + "\n\n";
+        if (step == 0 && !L.prereqs.empty()) {  // links to the lessons to know first
+            std::string links;
+            for (const std::string& id : L.prereqs)
+                for (const LessonDef& P : lessonLibrary())
+                    if (P.id == id) {  // numbered titles ("1. Limits") need their subject to make sense
+                        std::string t = P.title;
+                        if (std::isdigit((unsigned char)t[0]) && t.find(". ") != std::string::npos) t = P.subject + ": " + t.substr(t.find(". ") + 2);
+                        links += (links.empty() ? "" : "  \xC2\xB7  ") + std::string("[") + t + "](lesson:" + id + ")";
+                    }
+            if (!links.empty()) text += "**Before this lesson:** " + links + "\n\n";
+        }
+        text += L.steps[step].text;
         const std::string syms = lessonSymbols(L, step);
         if (!syms.empty()) text += "\n\n" + syms;
         lessonText(text);
@@ -542,6 +570,20 @@ void App::drawLessonBar() {
         ImGui::SetCursorScreenPos(ImVec2(p.x + n * gap + 6, p.y));
         ImGui::Dummy(ImVec2(0, fh));
     }
+    if (!lessonBack_.empty()) {  // came here by a prerequisite link
+        const auto [bi, bs] = lessonBack_.back();
+        ImGui::SameLine(0, 12);
+        const std::string lbl = "\xE2\x86\xA9 Back to " + lessonLibrary()[bi].title;
+        if (ImGui::SmallButton(lbl.c_str())) {
+            std::vector<std::pair<int, int>> rest(lessonBack_.begin(), lessonBack_.end() - 1);
+            startLesson(bi);
+            lessonStep_ = bs;
+            lessonBack_ = rest;
+            ImGui::PopFont(); ImGui::End(); ImGui::PopStyleColor(); ImGui::PopStyleVar(2);
+            return;
+        }
+        ImGui::SetItemTooltip("Return to the lesson you left, at step %d", bs + 1);
+    }
     ImGui::SameLine(0, 12);
     ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("%s  \xC2\xB7  %d / %d", L.title.c_str(), lessonStep_ + 1, n);
@@ -581,8 +623,7 @@ void App::drawLessonBar() {
         ImGui::AlignTextToFramePadding();
         ImGui::TextColored(colv(GOLD_C), "Check yourself");
         ImGui::SameLine(0, 10);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(lessonQ_.c_str());
+        richTextLine(lessonQ_, ImGui::GetColorU32(ImGuiCol_Text), col(WHITE));
         ImGui::SameLine(0, 12);
         ImGui::SetNextItemWidth(130);
         if (lessonFocusInput_) { ImGui::SetKeyboardFocusHere(); lessonFocusInput_ = false; }
@@ -598,7 +639,7 @@ void App::drawLessonBar() {
         if (!lessonHint_.empty() && lessonResult_ != 1) {
             ImGui::SameLine(0, 12);
             if (!lessonShowHint_) { if (ImGui::SmallButton("Hint")) lessonShowHint_ = true; }
-            else ImGui::TextDisabled("%s", lessonHint_.c_str());
+            else richTextLine(lessonHint_, ImGui::GetColorU32(ImGuiCol_TextDisabled), col(WHITE, 0.6f));
         }
         if (lessonResult_ == -1 || lessonResult_ == 1) {
             ImGui::SameLine(0, 12);

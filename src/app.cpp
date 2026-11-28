@@ -194,6 +194,11 @@ void App::frame(float dt) {
     }
     enterPane(focus_);
     ++frameNo_;
+    if (!pendingLink_.empty()) {  // a note link clicked last frame
+        const std::string t = pendingLink_;
+        pendingLink_.clear();
+        openLink(t);
+    }
     if (!opt_.actions.empty()) runScriptedActions();
     handleLayoutInput();
 
@@ -667,6 +672,7 @@ void App::runScriptedActions() {
             for (int li = 0; li < (int)lessonLibrary().size(); ++li)
                 if (lessonLibrary()[li].id == a.substr(7)) startLesson(li);
         }
+        else if (a.rfind("link:", 0) == 0) openLink(a.substr(5));
         else if (a == "K") addKeyframe();
         else if (a == "play") { tlPlaying_ = true; tlT_ = keys_.empty() ? 0 : keys_.front().t; tlScrub_ = true; }
         else if (a == "exporthalf") exportHalf_ = true;

@@ -95,7 +95,7 @@ ts::Box mathBox(const std::string& src, float size) {
         {"<=", "\xE2\x89\xA4"}, {">=", "\xE2\x89\xA5"}, {"!=", "\xE2\x89\xA0"}, {"->", "\xE2\x86\x92"},
         {"\xE2\x89\xA4", "\xE2\x89\xA4"}, {"\xE2\x89\xA5", "\xE2\x89\xA5"}, {"\xE2\x89\xA0", "\xE2\x89\xA0"},
         {"\xE2\x89\x88", "\xE2\x89\x88"}, {"\xE2\x86\x92", "\xE2\x86\x92"}, {"\xE2\x89\x85", "\xE2\x89\x85"},
-        {"~", "\xE2\x89\x88"}, {"=", "="}, {"<", "<"}, {">", ">"}};
+        {"\xC2\xB1", "\xC2\xB1"}, {"~", "\xE2\x89\x88"}, {"=", "="}, {"<", "<"}, {">", ">"}};
     std::vector<std::string> parts, ops;
     std::string cur;
     int depth = 0;
@@ -130,6 +130,64 @@ ts::Box mathBox(const std::string& src, float size) {
 
 }  // namespace
 
+// Whether every side of "lhs = rhs < ..." parses as an expression (so it typesets as maths, not as text).
+bool noteMathOk(const std::string& src) {
+    std::string t = src;
+    for (const char* r : {"<=", ">=", "!=", "->", "\xE2\x89\xA4", "\xE2\x89\xA5", "\xE2\x89\xA0", "\xE2\x89\x88", "\xE2\x86\x92", "\xC2\xB1"}) {
+        for (size_t at; (at = t.find(r)) != std::string::npos;) t.replace(at, std::strlen(r), "=");
+    }
+    for (char& c : t)
+        if (c == '<' || c == '>' || c == '~') c = '=';
+    size_t a = 0;
+    int depth = 0;
+    for (size_t i = 0; i <= t.size(); ++i) {
+        if (i < t.size() && (t[i] == '(' || t[i] == '[')) ++depth;
+        if (i < t.size() && (t[i] == ')' || t[i] == ']')) --depth;
+        if (depth < 0) return false;
+        if (i == t.size() || (t[i] == '=' && depth == 0)) {
+            const std::string p = trim(t.substr(a, i - a));
+            if (p.empty()) return false;
+            const std::set<std::string> calls = callNames(p);
+            if (!eq::parse(p, calls.empty() ? nullptr : &calls, true).root) return false;
+            a = i + 1;
+        }
+    }
+    return depth == 0;
+}
+
+// Draw one line of text with inline $maths$ at the ImGui cursor (for the lesson bar).
+void richTextLine(const std::string& src, ImU32 textCol, ImU32 mathCol) {
+    const std::string s = autoMath(src);
+    ImGuiStyle& st = ImGui::GetStyle();
+    bool first = true;
+    auto sameLine = [&] { if (!first) ImGui::SameLine(0, 0); first = false; };
+    for (size_t i = 0; i < s.size();) {
+        size_t d = s.find('$', i);
+        if (d != i) {  // prose
+            const std::string t = s.substr(i, d == std::string::npos ? std::string::npos : d - i);
+            sameLine();
+            ImGui::AlignTextToFramePadding();
+            ImGui::PushStyleColor(ImGuiCol_Text, textCol);
+            ImGui::TextUnformatted(t.c_str());
+            ImGui::PopStyleColor();
+            if (d == std::string::npos) break;
+            i = d;
+            continue;
+        }
+        size_t e = s.find('$', i + 1);
+        if (e == std::string::npos) e = s.size();
+        const ts::Box b = mathBox(s.substr(i + 1, e - i - 1), ImGui::GetFontSize() * 1.12f);
+        sameLine();
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float h = ImGui::GetFrameHeight();
+        ImFontBaked* fb = ImGui::GetFontBaked();
+        const float base = p.y + st.FramePadding.y + (fb ? fb->Ascent : ImGui::GetFontSize() * 0.8f);
+        ImGui::Dummy(ImVec2(b.w + 2, h));
+        ts::draw(ImGui::GetWindowDrawList(), b, ImVec2(p.x + 1, base), mathCol);
+        i = e + 1;
+    }
+}
+
 void App::layoutNote(float width) {
     Hasher hh;
     hh.u(std::hash<std::string>{}(noteText_));
@@ -150,24 +208,40 @@ void App::layoutNote(float width) {
 
     // flow a run of prose (with inline $maths$ and **bold**) into wrapped lines
     auto flow = [&](const std::string& textIn, ImFont* baseFont, float size, float indent, int role, bool bullet) {
-        struct Tok { bool math; bool bold; std::string s; };
+        struct Tok { bool math; bool bold; std::string s; std::string link; };
         std::vector<Tok> toks;
         bool inMath = false, isBold = false;
         std::string word;
         auto pushWord = [&] {
-            if (!word.empty()) toks.push_back({false, isBold, word});
+            if (!word.empty()) toks.push_back({false, isBold, word, ""});
             word.clear();
         };
         for (size_t i = 0; i < textIn.size(); ++i) {
             char c = textIn[i];
             if (inMath) {
-                if (c == '$') { toks.push_back({true, false, word}); word.clear(); inMath = false; }
+                if (c == '$') { toks.push_back({true, false, word, ""}); word.clear(); inMath = false; }
                 else word += c;
                 continue;
             }
             if (c == '$') { pushWord(); inMath = true; continue; }
+            if (c == '[') {  // [label](target)
+                const size_t m = textIn.find("](", i), e = m == std::string::npos ? m : textIn.find(')', m);
+                if (e != std::string::npos) {
+                    pushWord();
+                    const std::string label = textIn.substr(i + 1, m - i - 1), target = textIn.substr(m + 2, e - m - 2);
+                    size_t a = 0;
+                    for (size_t q = 0; q <= label.size(); ++q)
+                        if (q == label.size() || label[q] == ' ') {
+                            if (a > 0) toks.push_back({false, isBold, " ", ""});
+                            if (q > a) toks.push_back({false, isBold, label.substr(a, q - a), target});
+                            a = q + 1;
+                        }
+                    i = e;
+                    continue;
+                }
+            }
             if (c == '*' && i + 1 < textIn.size() && textIn[i + 1] == '*') { pushWord(); isBold = !isBold; ++i; continue; }
-            if (c == ' ') { pushWord(); toks.push_back({false, isBold, " "}); continue; }
+            if (c == ' ') { pushWord(); toks.push_back({false, isBold, " ", ""}); continue; }
             word += c;
         }
         pushWord();
@@ -214,6 +288,7 @@ void App::layoutNote(float width) {
                 p.item.size = size;
                 p.item.s = t.s;
                 p.item.role = t.bold && role == 0 ? 1 : role;
+                if (!t.link.empty()) { p.item.link = t.link; p.item.role = 3; }
                 p.item.w = f->CalcTextSizeA(size, FLT_MAX, 0, t.s.c_str()).x;
                 p.asc = 0.8f * size;
                 p.desc = 0.26f * size;
@@ -311,6 +386,18 @@ void App::drawNotePane(ImDrawList* dl) {
                 ImFontBaked* b = it.font->GetFontBaked(it.size);
                 float asc = b ? std::round(b->Ascent) : it.size * 0.8f;
                 dl->AddText(it.font, it.size, ImVec2(ox + it.x, by - asc), c, it.s.c_str());
+                if (!it.link.empty()) {  // links: underline, brighter on hover, click to follow
+                    const ImVec2 m = ImGui::GetIO().MousePos;
+                    const bool hov = !ImGui::GetIO().WantCaptureMouse && inVisible(m) && m.x >= canvasMin_.x && m.x < canvasMax_.x &&
+                                     m.y >= canvasMin_.y && m.y < canvasMax_.y && m.x >= ox + it.x && m.x < ox + it.x + it.w &&
+                                     m.y >= by - asc && m.y < by + 0.3f * it.size;
+                    dl->AddLine(ImVec2(ox + it.x, by + 2.5f), ImVec2(ox + it.x + it.w, by + 2.5f), hov ? col(WHITE) : col(BLUE_C, 0.5f), 1.2f);
+                    if (hov) {
+                        dl->AddText(it.font, it.size, ImVec2(ox + it.x, by - asc), col(WHITE), it.s.c_str());
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                        if (ImGui::IsMouseClicked(0)) pendingLink_ = it.link;
+                    }
+                }
                 break;
             }
             case NoteItem::Math: ts::draw(dl, it.box, ImVec2(ox + it.x, by), c); break;

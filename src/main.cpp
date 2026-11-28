@@ -183,6 +183,25 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
+        if (a == "--lesson-automath") {  // print each maths run autoMath typesets in the lessons, and exit
+            for (const LessonDef& L : lessonLibrary()) {
+                std::vector<std::string> texts;
+                for (auto& st : L.steps) texts.push_back(st.text);
+                for (auto& q : L.test) texts.push_back(q.text);
+                for (const std::string& t : texts) {
+                    const std::string m = autoMath(t);
+                    // print the $…$ runs that weren't in the original
+                    for (size_t i = 0; (i = m.find('$', i)) != std::string::npos;) {
+                        size_t e = m.find('$', i + 1);
+                        if (e == std::string::npos) break;
+                        const std::string run = m.substr(i, e + 1 - i);
+                        if (t.find(run) == std::string::npos) std::printf("%s\t%s\n", L.id.c_str(), run.c_str());
+                        i = e + 1;
+                    }
+                }
+            }
+            return 0;
+        }
         if (a == "--lesson-symbols") {  // print each lesson step's symbol glossary and exit
             for (const LessonDef& L : lessonLibrary())
                 for (int k = 0; k < (int)L.steps.size(); ++k) {

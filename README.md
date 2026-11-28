@@ -111,12 +111,14 @@ copies it.
 
 ## Lessons
 
-**Lessons** (the button under the project name) teaches trigonometry, calculus, linear algebra and the Millennium Prize Problems with live graphs. Each lesson puts its explanation in a
+**Lessons** (the button under the project name) teaches precalculus, trigonometry, calculus, linear algebra and the Millennium Prize Problems with live graphs. Each lesson puts its explanation in a
 pane on the left. Every step moves the graphs into place with smooth transitions: sliders sweep, matrices morph,
 and curves appear. Many steps end with a **Check yourself** question. Answers can be numbers or expressions, such
 as `0.5`, `sqrt(3)/2` or `2pi/3`, and come with hints. Move between steps with **Back** and **Next**, with
 **←** and **→**, or by clicking the progress dots. Your progress is remembered.
 
+- **Precalculus:** functions and transformations (shifts, stretches, composition, inverses, |x| as distance),
+  polynomials and rational functions (zeros, the quadratic formula, asymptotes, holes), and exponentials and logarithms.
 - **Trigonometry:** the unit circle and radians, sine and cosine waves, tangent and its friends, and shaping a
   wave with a sin(b(x − c)) + d.
 - **Calculus:** limits, the derivative (secant to tangent), what f′ tells you, area under a curve (Riemann sums),
@@ -157,6 +159,14 @@ answers and multiple choice, and some set up their own picture. Your first answe
 wrong answer shows the right one and the step to review. The results screen lists every question with its
 answer, and offers **Retry test** and **Next lesson**. Your best score is saved, and the lesson list marks
 lessons passed with 80% or more.
+
+**Prerequisites.** Every lesson's first step starts with **Before this lesson:** links to the lessons it builds on.
+Clicking one opens that lesson, and **↩ Back to …** in the lesson bar returns you to the step you left. The list is in
+`lessonLibrary()` in `src/lessons_content.cpp`. Lesson text can link anywhere with `[label](lesson:<id>)`.
+
+**Typeset maths.** Equations typed as plain text in a lesson (3x − 5, |x − a| < δ, A(x) = 2πx² + 2000/x) are
+typeset like the graph labels, in the lesson pane and the Check yourself line. Only runs that parse are converted
+(`src/automath.cpp`); `--lesson-automath` lists every conversion.
 
 **Symbols.** When a step is the first in its lesson to use a symbol (ε, δ, ∫, ∇, |x|, ln, …), its text ends with a
 **Symbols** list defining each one, with the meaning it has in that lesson (δ is an input tolerance in Unit 0 and the Dirac
@@ -314,6 +324,8 @@ and has two or more keyframes).
 | `src/lesson.cpp`, `src/lessons_content.cpp`, `src/lessons_millennium.cpp`, `src/lesson_tests.cpp` | lesson engine (steps, transitions, questions, tests, progress) and the lessons |
 | `src/ink.cpp`, `src/ink_vision.mm` | handwriting panes: templates, $P matching, stroke grouping, layout parsing, Vision fusion |
 | `src/overlays.cpp` | unit circle, matrix transformation, trace line, shaded area, parametric curves, vector and slope fields |
+| `src/lessons_precalc.cpp` | the precalculus lessons |
+| `src/automath.cpp` | typesets plain-text maths in lesson prose |
 | `src/lesson_symbols.cpp` | the symbol glossary added to the step that introduces each symbol |
 | `src/lesson_kit.hpp`, `src/lessons_course*.cpp` | helpers for writing lessons; the calculus course (placement, Units 0–18, midterm, final) |
 | `src/fractal.cpp` | fractal mode: escape-time iteration, CPU double-precision renderer, orbits, panel section |

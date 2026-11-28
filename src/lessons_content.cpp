@@ -879,15 +879,70 @@ LessonDef laEigen() {
 
 const std::vector<LessonDef>& lessonLibrary() {
     static const std::vector<LessonDef> lib = [] {
-        std::vector<LessonDef> v = {
+        std::vector<LessonDef> v = precalcLessons();
+        for (LessonDef& L : std::vector<LessonDef>{
             trigCircle(),  trigWaves(),      trigTan(),      trigTransform(),
             calcLimits(),  calcDerivative(), calcShape(),    calcIntegral(), calcFTC(), calcTaylor(),
             laVectors(),   laTransform(),    laDeterminant(), laSystems(),   laEigen(),
-        };
+        })
+            v.push_back(std::move(L));
         for (LessonDef& m : millenniumLessons()) v.push_back(std::move(m));
         for (LessonDef& c : calculusCourse()) v.push_back(std::move(c));
-        for (LessonDef& L : v)
+        // what to know first: each lesson links to these from its first step
+        static const std::map<std::string, std::vector<std::string>> prereqs = {
+            {"pc-polynomials", {"pc-functions"}},
+            {"pc-explog", {"pc-functions"}},
+            {"trig-circle", {"pc-functions"}},
+            {"trig-waves", {"trig-circle", "pc-functions"}},
+            {"trig-tan", {"trig-circle"}},
+            {"trig-transform", {"trig-waves"}},
+            {"calc-limits", {"pc-functions", "pc-polynomials"}},
+            {"calc-derivative", {"calc-limits"}},
+            {"calc-shape", {"calc-derivative"}},
+            {"calc-integral", {"calc-derivative"}},
+            {"calc-ftc", {"calc-integral"}},
+            {"calc-taylor", {"calc-ftc", "pc-polynomials"}},
+            {"la-vectors", {"pc-functions"}},
+            {"la-transform", {"la-vectors"}},
+            {"la-det", {"la-transform"}},
+            {"la-systems", {"la-transform"}},
+            {"la-eigen", {"la-det", "la-systems", "pc-polynomials"}},
+            {"cc-placement", {"pc-functions", "pc-polynomials", "pc-explog", "trig-circle"}},
+            {"cc-u0", {"cc-placement", "calc-limits", "pc-functions"}},
+            {"cc-u1", {"cc-u0", "calc-derivative", "trig-waves"}},
+            {"cc-u2", {"cc-u1", "pc-explog", "pc-functions"}},
+            {"cc-u3", {"cc-u2", "calc-shape"}},
+            {"cc-u4", {"cc-u3", "calc-integral", "calc-ftc"}},
+            {"cc-u5", {"cc-u4"}},
+            {"cc-u6", {"cc-u5", "trig-tan", "pc-polynomials"}},
+            {"cc-midterm", {"cc-u1", "cc-u2", "cc-u3", "cc-u4", "cc-u5", "cc-u6"}},
+            {"cc-u7", {"cc-midterm", "calc-taylor"}},
+            {"cc-u8", {"cc-u7", "trig-circle"}},
+            {"cc-u9", {"cc-u8", "la-vectors"}},
+            {"cc-u10", {"cc-u9"}},
+            {"cc-u11", {"cc-u10", "la-det"}},
+            {"cc-u12", {"cc-u11"}},
+            {"cc-u13", {"cc-u12", "pc-explog"}},
+            {"cc-u14", {"cc-u13", "cc-u8"}},
+            {"cc-u15", {"cc-u14"}},
+            {"cc-u16", {"cc-u15", "la-eigen"}},
+            {"cc-u17", {"cc-u16"}},
+            {"cc-u18", {"cc-u17", "cc-u7"}},
+            {"cc-final", {"cc-midterm", "cc-u7", "cc-u8", "cc-u9", "cc-u10", "cc-u11", "cc-u12", "cc-u13", "cc-u14", "cc-u15", "cc-u16",
+                          "cc-u17", "cc-u18"}},
+            {"mp-riemann", {"calc-taylor", "cc-u7", "cc-u8"}},
+            {"mp-pvsnp", {"pc-explog", "pc-polynomials"}},
+            {"mp-navier-stokes", {"cc-u12", "cc-u18"}},
+            {"mp-yang-mills", {"cc-u12", "la-eigen"}},
+            {"mp-hodge", {"cc-u12", "la-transform"}},
+            {"mp-poincare", {"cc-u11", "cc-u12"}},
+            {"mp-bsd", {"pc-polynomials", "cc-u7"}},
+        };
+        for (LessonDef& L : v) {
             if (L.test.empty()) L.test = lessonTests(L.id);
+            auto it = prereqs.find(L.id);
+            if (it != prereqs.end()) L.prereqs = it->second;
+        }
         return v;
     }();
     return lib;
