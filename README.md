@@ -294,6 +294,7 @@ and has two or more keyframes).
 --frames N --shot out.bmp     render N frames at 60 fps, save the last one, exit
 --sum-pos T                   freeze the summation player at T terms
 --project FILE                open a saved project, demo:riemann / poincare / navier-stokes / fractals, or lesson:<id> (e.g. lesson:calc-derivative)
+--mem-log N                   every N frames, print the memory footprint, CPU time per frame and font-atlas size (to diagnose slowdowns)
 --actions "10:c,90:3,150:d"   scripted toggles at given frames (c, 3, d, p, e<N>)
 --mouse X,Y                   fake cursor position (testing hover readouts)
 ```

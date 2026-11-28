@@ -1,6 +1,7 @@
 // eqviz — an equation visualizer in the visual style of manim / 3Blue1Brown.
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include "imgui_internal.h"
 
 #include <algorithm>
 #include <cfloat>
@@ -11,6 +12,9 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif
 
 #include "app.hpp"
 #include "gl.hpp"
@@ -162,8 +166,19 @@ static void usage() {
         "  --project FILE     open a saved project, or demo:pvsnp / hodge / poincare / riemann / yang-mills / navier-stokes / bsd / fractals\n");
 }
 
+// The process's memory footprint in MB (what Activity Monitor shows), or -1.
+static double footprintMB() {
+#ifdef __APPLE__
+    task_vm_info_data_t info;
+    mach_msg_type_number_t n = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &n) == KERN_SUCCESS) return info.phys_footprint / 1048576.0;
+#endif
+    return -1;
+}
+
 int main(int argc, char** argv) {
     LaunchOptions opt;
+    int memLog = 0;
     std::string renderIcon;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -188,6 +203,7 @@ int main(int argc, char** argv) {
         else if (a == "--size") std::sscanf(next().c_str(), "%dx%d", &opt.width, &opt.height);
         else if (a == "--actions") opt.actions = next();
         else if (a == "--project") opt.project = next();
+        else if (a == "--mem-log") memLog = std::atoi(next().c_str());
         else if (a == "--bench") opt.bench = std::atoi(next().c_str());
         else if (a == "--no-gpu") opt.noGpu = true;
         else if (a == "--render-icon") { renderIcon = next(); opt.width = opt.height = 512; }
@@ -325,7 +341,20 @@ int main(int argc, char** argv) {
         cpuMs += ms;
         double renderStart = 0;
         if (opt.bench) renderStart = ms;
-        if (frame > 60) frameMs.push_back(ms);  // skip start-up (fonts, sieve, zero table)
+        if (frame > 60) frameMs.push_back(ms);
+        if (memLog > 0) {  // --mem-log N: every N frames, the memory footprint and mean CPU time per frame
+            static int n = 0;
+            static double acc = 0;
+            acc += ms;
+            if (++n % memLog == 0) {
+                ImFontAtlas* at = io.Fonts;
+                std::printf("mem-log frame %d: %.1f MB, %.2f ms/frame, font atlas %dx%d, %d bakes\n", n, footprintMB(), acc / memLog,
+                            at->TexData ? at->TexData->Width : 0, at->TexData ? at->TexData->Height : 0,
+                            at->Builder ? at->Builder->BakedPool.Size - at->Builder->BakedDiscardedCount : -1);
+                std::fflush(stdout);
+                acc = 0;
+            }
+        }  // skip start-up (fonts, sieve, zero table)
 
         int fw, fh;
         glfwGetFramebufferSize(window, &fw, &fh);
