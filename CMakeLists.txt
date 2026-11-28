@@ -67,6 +67,7 @@ add_executable(eqviz
   src/lesson.cpp
   src/lessons_content.cpp
   src/lesson_tests.cpp
+  src/lesson_symbols.cpp
   src/lessons_millennium.cpp
   src/lessons_course.cpp
   src/lessons_course1.cpp

@@ -234,7 +234,12 @@ void App::lessonGo(int step, bool animate) {
     computePaneRects();
     StepCtx out{*this, lessonBase_};
     Keyframe to = lessonTarget(step, &out, nullptr);
-    lessonText("# " + L.steps[step].title + "\n\n" + L.steps[step].text);
+    {
+        std::string text = "# " + L.steps[step].title + "\n\n" + L.steps[step].text;
+        const std::string syms = lessonSymbols(L, step);
+        if (!syms.empty()) text += "\n\n" + syms;
+        lessonText(text);
+    }
     lessonStep_ = step;
     lessonQ_ = out.question;
     lessonAns_ = out.answer;

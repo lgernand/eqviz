@@ -168,6 +168,14 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
+        if (a == "--lesson-symbols") {  // print each lesson step's symbol glossary and exit
+            for (const LessonDef& L : lessonLibrary())
+                for (int k = 0; k < (int)L.steps.size(); ++k) {
+                    const std::string g = lessonSymbols(L, k);
+                    if (!g.empty()) std::printf("== %s / %s\n%s", L.id.c_str(), L.steps[k].title.c_str(), g.c_str() + 12);
+                }
+            return 0;
+        }
         if (a == "--eq") opt.eq = next();
         else if (a == "--complex") opt.complex = true;
         else if (a == "--3d") opt.threeD = true;

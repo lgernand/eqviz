@@ -391,6 +391,7 @@ struct LessonDef {
 };
 int nextLessonIndex(int idx);  // the lesson after idx in its track or subject, or -1
 const std::vector<LessonDef>& lessonLibrary();
+std::string lessonSymbols(const LessonDef& L, int step);  // "## Symbols" definitions for symbols this step introduces, or "" (lesson_symbols.cpp)
 std::vector<TestQuestion> lessonTests(const std::string& id);  // tests for the built-in lessons (lesson_tests.cpp)
 std::vector<LessonDef> millenniumLessons();                     // lessons_millennium.cpp
 

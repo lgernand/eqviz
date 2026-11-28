@@ -158,6 +158,10 @@ wrong answer shows the right one and the step to review. The results screen list
 answer, and offers **Retry test** and **Next lesson**. Your best score is saved, and the lesson list marks
 lessons passed with 80% or more.
 
+**Symbols.** When a step is the first in its lesson to use a symbol (ε, δ, ∫, ∇, |x|, ln, …), its text ends with a
+**Symbols** list defining each one, with the meaning it has in that lesson (δ is an input tolerance in Unit 0 and the Dirac
+delta in Unit 15). Later steps don't repeat it. The definitions are in `src/lesson_symbols.cpp`; `--lesson-symbols` prints them all.
+
 The lessons use four teaching tools. You can also turn them on yourself for any real-axes pane, in the panel's
 **Graph** section:
 
@@ -309,6 +313,7 @@ and has two or more keyframes).
 | `src/lesson.cpp`, `src/lessons_content.cpp`, `src/lessons_millennium.cpp`, `src/lesson_tests.cpp` | lesson engine (steps, transitions, questions, tests, progress) and the lessons |
 | `src/ink.cpp`, `src/ink_vision.mm` | handwriting panes: templates, $P matching, stroke grouping, layout parsing, Vision fusion |
 | `src/overlays.cpp` | unit circle, matrix transformation, trace line, shaded area, parametric curves, vector and slope fields |
+| `src/lesson_symbols.cpp` | the symbol glossary added to the step that introduces each symbol |
 | `src/lesson_kit.hpp`, `src/lessons_course*.cpp` | helpers for writing lessons; the calculus course (placement, Units 0–18, midterm, final) |
 | `src/fractal.cpp` | fractal mode: escape-time iteration, CPU double-precision renderer, orbits, panel section |
 | `src/gpu.cpp` | expression → GLSL compiler and GPU domain colouring |
